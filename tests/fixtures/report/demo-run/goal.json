@@ -1,0 +1,10 @@
+{
+  "from": "IST",
+  "to": "LHR",
+  "date": "2026-11-20",
+  "passenger": {
+    "first": "Ada",
+    "last": "Lovelace",
+    "email": "ada@example.test"
+  }
+}

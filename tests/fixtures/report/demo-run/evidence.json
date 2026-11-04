@@ -1,0 +1,9 @@
+{
+  "frame": 2,
+  "concept": "Payment declined toast",
+  "boxes": [
+    {"x1": 704, "y1": 88, "x2": 1210, "y2": 196, "w": 1280, "h": 800}
+  ],
+  "mask_svg": "evidence_mask.svg",
+  "source": "sam-3.1"
+}

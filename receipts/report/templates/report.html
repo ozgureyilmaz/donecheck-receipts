@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Receipts · {{ run_id }}</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #edf2f8; --muted: #a5b3c4; --line: #283549;
+      --panel: #111a27; --panel-hi: #172335; --canvas: #09111d;
+      --green: #49d69b; --red: #ff6d79; --amber: #ffc96b; --cyan: #73cdf2;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: radial-gradient(ellipse at 76% -20%, #18304a 0, transparent 47%), var(--canvas);
+      color: var(--ink); font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: #8bd8f7; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .shell { width: min(1880px, calc(100% - 88px)); margin: 0 auto; padding: 28px 0 64px; }
+    .topline { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; letter-spacing: .04em; }
+    .brand { display: inline-flex; gap: 10px; align-items: center; color: var(--ink); font-weight: 750; letter-spacing: .02em; }
+    .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #19354a; color: var(--cyan); font-size: 18px; }
+    .eyebrow { color: var(--cyan); font-size: 12px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 38px; align-items: center; margin: 40px 0 27px; }
+    h1 { margin: 8px 0 7px; font-size: clamp(34px, 3vw, 54px); letter-spacing: -.045em; line-height: 1.06; }
+    .runid { color: var(--muted); font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .verdict {
+      min-width: 238px; padding: 21px 27px; border: 1px solid currentColor; border-radius: 18px;
+      background: color-mix(in srgb, currentColor 9%, var(--panel)); text-align: center;
+      box-shadow: 0 12px 44px #0004;
+    }
+    .verdict .label { display: block; font-size: 11px; font-weight: 800; letter-spacing: .15em; opacity: .85; text-transform: uppercase; }
+    .verdict strong { display: block; margin-top: 4px; font-size: 25px; letter-spacing: .01em; }
+    .TRUE_DONE { color: var(--green); } .FALSE_DONE { color: var(--red); } .UNSURE { color: var(--amber); }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(390px, .85fr); gap: 22px; align-items: start; }
+    .card { min-width: 0; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(155deg, #152131, var(--panel) 58%); box-shadow: 0 14px 36px #0003; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 23px 14px; }
+    h2 { margin: 0; font-size: 18px; letter-spacing: -.015em; }
+    h3 { margin: 0; font-size: 14px; }
+    .small { color: var(--muted); font-size: 13px; }
+    .evidence-card { overflow: hidden; }
+    .frame-wrap { position: relative; width: 100%; min-height: 300px; display: grid; place-items: center; overflow: hidden; background: #05090f; }
+    .evidence-image { display: block; width: 100%; max-height: 675px; object-fit: contain; }
+    .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .overlay rect { fill: #ff585822; stroke: #ff675f; stroke-width: 4; vector-effect: non-scaling-stroke; }
+    .no-frame { padding: 90px 20px; color: var(--muted); text-align: center; }
+    .frame-meta { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 13px 20px 17px; }
+    .tag { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: #c5d2e1; background: #0c1520; font-size: 12px; }
+    .tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); }
+    .right-column { display: grid; gap: 20px; }
+    .goal-list { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; padding: 0 23px 20px; margin: 0; }
+    .goal-list dt { color: var(--muted); } .goal-list dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .claim { margin: 0 23px 16px; padding: 15px 17px; border-left: 3px solid var(--cyan); border-radius: 0 11px 11px 0; background: #0b1420; font-size: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .rationale { padding: 0 23px 20px; margin: 0; color: #c6d2df; }
+    .source-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 20px 20px; }
+    .source { padding: 13px 12px; border: 1px solid var(--line); border-radius: 12px; background: #0b1420; text-align: center; }
+    .source span { display: block; color: var(--muted); font-size: 12px; }
+    .source strong { display: block; margin-top: 5px; font-size: 14px; }
+    .check-wrap { padding: 0 20px 19px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { color: var(--muted); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: .08em; }
+    th, td { padding: 9px 7px; border-bottom: 1px solid #243145; vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    .status { font-weight: 800; white-space: nowrap; } .status.pass { color: var(--green); } .status.fail { color: var(--red); }
+    .timeline-card, .audit-card { margin-top: 22px; overflow: hidden; }
+    .filmstrip { display: flex; gap: 12px; overflow-x: auto; padding: 0 20px 20px; scroll-snap-type: x mandatory; }
+    .timeline-frame { flex: 0 0 190px; display: block; padding: 0; border: 2px solid transparent; border-radius: 12px; background: #080e17; color: var(--ink); cursor: pointer; overflow: hidden; scroll-snap-align: start; text-align: left; }
+    .timeline-frame.is-evidence { border-color: var(--red); box-shadow: 0 0 0 2px #ff675f33; }
+    .timeline-frame img { display: block; width: 100%; height: 112px; object-fit: cover; background: #060a11; }
+    .timeline-frame .missing-thumb { display: grid; place-items: center; height: 112px; color: var(--muted); font-size: 12px; }
+    .timeline-caption { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; font-size: 12px; }
+    .timeline-caption span:last-child { color: var(--muted); }
+    .frame-focused { outline: 2px solid #ff675f; outline-offset: 3px; }
+    .frame-wrap.is-expanded { min-height: 0; }
+    .frame-wrap.is-expanded .evidence-image { max-height: 78vh; }
+    .audit-note { margin: -6px 20px 13px; color: var(--muted); font-size: 12px; }
+    .audit-list { display: grid; gap: 7px; padding: 0 20px 19px; margin: 0; list-style: none; }
+    .audit-list li { display: grid; grid-template-columns: minmax(140px, .4fr) minmax(0, 1.6fr); gap: 14px; padding: 8px 10px; border: 1px solid #243145; border-radius: 9px; background: #0b1420; }
+    code { color: #bed5e9; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 25px; color: var(--muted); font-size: 12px; }
+    .empty { color: var(--muted); padding: 0 20px 20px; }
+    @media (max-width: 980px) {
+      .shell { width: min(100% - 32px, 720px); padding-top: 18px; }
+      .hero { grid-template-columns: 1fr; gap: 20px; margin-top: 28px; }
+      .verdict { justify-self: start; }
+      .grid { grid-template-columns: 1fr; }
+      .right-column { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: calc(100% - 22px); }
+      .topline { align-items: flex-start; }
+      .topline > span { max-width: 48%; text-align: right; overflow-wrap: anywhere; }
+      .goal-list { grid-template-columns: 82px 1fr; padding-left: 16px; padding-right: 16px; }
+      .claim { margin-left: 16px; margin-right: 16px; }
+      .source-grid { gap: 6px; padding-left: 12px; padding-right: 12px; }
+      .source { padding: 10px 6px; }
+      .source strong { font-size: 11px; }
+      .audit-list li { grid-template-columns: 1fr; gap: 3px; }
+      .footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="topline">
+      <div class="brand"><span class="brand-mark">✓</span> RECEIPTS <span class="small">/ completion audit</span></div>
+      <span>Evidence-backed review · local report</span>
+    </div>
+
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Run report</div>
+        <h1>Did the agent finish?</h1>
+        <div class="runid">{{ run_id }}</div>
+      </div>
+      <div class="verdict {{ combined_verdict }}" aria-label="Combined verdict: {{ combined_verdict|replace('_', ' ') }}">
+        <span class="label">Combined verdict</span>
+        <strong>{{ combined_verdict|replace('_', ' ') }}</strong>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Run evidence and audit summary">
+      <article class="card evidence-card" id="evidence">
+        <div class="card-head">
+          <div><div class="eyebrow" id="evidence-frame-label">Frame {{ evidence_frame if evidence_frame is not none else '—' }}{% if evidence_t_s is not none %} · {{ '%.1f'|format(evidence_t_s) }}s{% endif %}</div><h2 id="evidence-concept-title">{{ evidence_concept }}</h2></div>
+          {% if video_asset %}<a class="tag" id="evidence-video" data-video-base="{{ video_base }}" href="{{ video_asset }}" target="_blank" rel="noopener">▶ Open video at evidence</a>{% endif %}
+        </div>
+        <div class="frame-wrap" id="evidence-frame" data-evidence-frame="true">
+          {% if evidence_image %}
+            <img class="evidence-image" id="evidence-image" src="{{ evidence_image }}" alt="Selected evidence frame {{ evidence_frame if evidence_frame is not none else '' }}">
+            {% if overlay_boxes %}
+              <svg class="overlay" id="evidence-overlay" viewBox="0 0 {{ overlay_width }} {{ overlay_height }}" preserveAspectRatio="none" aria-label="Evidence box overlay" role="img">
+                {% for box in overlay_boxes %}<rect x="{{ '%.3f'|format(box.x) }}" y="{{ '%.3f'|format(box.y) }}" width="{{ '%.3f'|format(box.width) }}" height="{{ '%.3f'|format(box.height) }}" rx="8" />{% endfor %}
+              </svg>
+            {% endif %}
+          {% else %}<div class="no-frame">Evidence screenshot is unavailable for this run.</div>{% endif %}
+        </div>
+        <div class="frame-meta">
+          <span class="tag"><span class="dot"></span><span id="evidence-source">Evidence source: {{ evidence_source }}</span></span>
+          {% if mask_asset %}<a class="tag" id="evidence-mask" href="{{ mask_asset }}" target="_blank" rel="noopener">Open local mask SVG ↗</a>{% endif %}
+          {% if evidence_step %}<button class="tag" id="enlarge-evidence" type="button">Enlarge frame</button>{% endif %}
+        </div>
+      </article>
+
+      <aside class="right-column">
+        <section class="card">
+          <div class="card-head"><div><div class="eyebrow">Task context</div><h2>Goal & agent claim</h2></div></div>
+          <dl class="goal-list">
+            <dt>Route</dt><dd>{% if goal.get('from') or goal.get('to') %}{{ goal.get('from', '—') }} → {{ goal.get('to', '—') }}{% else %}Not recorded{% endif %}</dd>
+            <dt>Date</dt><dd>{{ goal.get('date', 'Not recorded') }}</dd>
+            <dt>Passenger</dt><dd>{% set passenger = goal.get('passenger', {}) %}{% if passenger is mapping %}{{ passenger.get('first', '') }} {{ passenger.get('last', '') }}{% if passenger.get('email') %}<span class="small"> · {{ passenger.get('email') }}</span>{% endif %}{% else %}Not recorded{% endif %}</dd>
+          </dl>
+          <h3 style="padding:0 23px 8px">Agent claim</h3>
+          <blockquote class="claim">“{{ claim }}”</blockquote>
+          <p class="rationale">{{ rationale }}</p>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><div class="eyebrow">Independent views</div><h2>Verdicts by source</h2></div></div>
+          <div class="source-grid">
+            {% for source in sources %}<div class="source"><span>{{ source.name }}</span><strong class="{{ source.verdict }}">{{ source.verdict|replace('_', ' ') }}</strong></div>{% endfor %}
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><div class="eyebrow">Deterministic evidence</div><h2>DOM checks</h2></div></div>
+          {% if checks %}<div class="check-wrap"><table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead><tbody>
+            {% for check in checks %}<tr><td>{{ check.name }}</td><td class="status {{ 'pass' if check.passed else 'fail' }}">{{ check.status }}</td><td>{{ check.detail }}</td></tr>{% endfor %}
+          </tbody></table></div>{% else %}<p class="empty">No DOM checks were recorded.</p>{% endif %}
+        </section>
+      </aside>
+    </section>
+
+    <section class="card timeline-card" aria-label="Episode timeline">
+      <div class="card-head"><div><div class="eyebrow">Episode recording</div><h2>Step timeline</h2></div><span class="small">Select a frame to jump to evidence</span></div>
+      {% if steps %}<div class="filmstrip" id="filmstrip">
+        {% for step in steps %}<button class="timeline-frame{{ ' is-evidence' if step.is_evidence else '' }}" type="button" data-frame="{{ step.idx }}" data-time="{{ step.t_s if step.t_s is not none else '' }}" data-screenshot="{{ step.screenshot or '' }}" data-action="{{ step.action }}" data-is-evidence="{{ 'true' if step.is_evidence else 'false' }}" aria-label="Open step {{ step.idx }} at {{ step.time_label }}">
+          {% if step.screenshot %}<img src="{{ step.screenshot }}" alt="Step {{ step.idx }} screenshot" loading="lazy">{% else %}<span class="missing-thumb">Screenshot unavailable</span>{% endif %}
+          <span class="timeline-caption"><span>Step {{ step.idx }}</span><span>{{ step.time_label }}</span></span>
+        </button>{% endfor %}
+      </div>{% else %}<p class="empty">No recorded steps are available.</p>{% endif %}
+    </section>
+
+    <section class="card audit-card">
+      <div class="card-head"><div><div class="eyebrow">Integrity trail</div><h2>Artifact SHA-256</h2></div></div>
+      <p class="audit-note">{{ audit_label }}</p>
+      {% if artifacts %}<ul class="audit-list">{% for artifact in artifacts %}<li><span>{{ artifact.path }}{% if artifact.size is not none %}<span class="small"> · {{ artifact.size }} bytes</span>{% endif %}</span><code>{{ artifact.sha256 }}</code></li>{% endfor %}</ul>{% else %}<p class="empty">No run files were available to hash.</p>{% endif %}
+    </section>
+
+    <footer class="footer"><span>Receipts · verify before done</span><span>Report generated from run artifacts; oracle data is not shown.</span></footer>
+  </main>
+  <script>
+    (() => {
+      const evidence = document.getElementById('evidence-frame');
+      const initialFrame = {{ evidence_frame if evidence_frame is not none else 'null' }};
+      const frames = [...document.querySelectorAll('.timeline-frame')];
+      const image = document.getElementById('evidence-image');
+      const overlay = document.getElementById('evidence-overlay');
+      const label = document.getElementById('evidence-frame-label');
+      const title = document.getElementById('evidence-concept-title');
+      const video = document.getElementById('evidence-video');
+      const source = document.getElementById('evidence-source');
+      const mask = document.getElementById('evidence-mask');
+      const evidenceConcept = title?.textContent ?? '';
+      const evidenceSource = source?.textContent ?? '';
+      const enlarge = () => {
+        evidence?.classList.add('is-expanded');
+        document.getElementById('evidence')?.classList.add('frame-focused');
+      };
+      const showFrame = (item, movePage = false) => {
+        frames.forEach((frameItem) => frameItem.classList.toggle('is-evidence', frameItem === item));
+        if (image && item.dataset.screenshot) {
+          image.src = item.dataset.screenshot;
+          image.alt = `Step ${item.dataset.frame} screenshot`;
+        }
+        const isEvidence = item.dataset.isEvidence === 'true';
+        if (overlay) overlay.hidden = !isEvidence;
+        if (title) title.textContent = isEvidence ? evidenceConcept : item.dataset.action || `Step ${item.dataset.frame}`;
+        if (source) source.textContent = isEvidence ? evidenceSource : 'Timeline screenshot · no evidence overlay';
+        if (mask) mask.hidden = !isEvidence;
+        if (label) label.textContent = `Step ${item.dataset.frame}${item.dataset.time ? ` · ${Number(item.dataset.time).toFixed(1)}s` : ''}`;
+        if (video && item.dataset.time) video.href = `${video.dataset.videoBase}#t=${Number(item.dataset.time).toFixed(3)}`;
+        enlarge();
+        if (movePage) document.getElementById('evidence')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+      };
+      if (initialFrame !== null) {
+        const selected = frames.find((item) => item.dataset.frame === String(initialFrame));
+        selected?.scrollIntoView({block: 'nearest', inline: 'center'});
+        enlarge();
+        window.setTimeout(() => document.getElementById('evidence')?.scrollIntoView({block: 'center'}), 120);
+      }
+      document.getElementById('enlarge-evidence')?.addEventListener('click', () => {
+        evidence?.classList.toggle('is-expanded');
+      });
+      frames.forEach((item) => item.addEventListener('click', () => showFrame(item, true)));
+    })();
+  </script>
+</body>
+</html>

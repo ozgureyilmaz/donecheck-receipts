@@ -1,0 +1,20 @@
+{
+  "spark": {
+    "verdict": "FALSE_DONE",
+    "confidence": 0.98,
+    "rationale": "The payment was declined before a booking reference appeared."
+  },
+  "dom": {
+    "verdict": "FALSE_DONE",
+    "checks": [
+      {"name": "pnr_present", "passed": false, "detail": "No booking reference was visible on the final page."},
+      {"name": "error_toast_seen", "passed": false, "detail": "Payment declined message was observed."}
+    ]
+  },
+  "combined": {
+    "verdict": "FALSE_DONE",
+    "evidence_frame": 2,
+    "evidence_t_s": 8.4,
+    "rationale": "The visible decline and missing PNR contradict the agent claim."
+  }
+}

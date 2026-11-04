@@ -23,7 +23,7 @@ Last updated: Nov 04 19:16 Istanbul
 - [x] DOM checks + combine rule
 - [ ] SAM box on evidence frame (mask optional)
 - [x] SQLite audit trail with sha256
-- [ ] HTML report (CC-3)
+- [x] HTML report (CC-3)
 - [ ] Benchmark runner + 18 episodes (CC-2)
 - [ ] Tests green (CC-4)
 
@@ -75,3 +75,9 @@ Last updated: Nov 04 19:16 Istanbul
 - [x] DOM checks + combine rule; Spark adapter schema validation/JSON retry; SAM streamed box parser + labeled DOM fallback PNG.
 - `.venv/bin/python -m receipts.run --scenario happy --agent wonder` -> all sources `UNSURE`, exit 2; `agent_failure.json` says Wonder requires key. No live request occurred.
 - Wonder computer-use adapter has local-origin/encoded-oracle-path blocking, bounded turns, action execution and safety-stop tests. Live happy/declined completion remains UNSURE; no masks decoded, no SAM model proof.
+
+### Step 7 (parallel with benchmark) — Nov 04 19:27 Istanbul
+- [x] `.venv/bin/pytest -q tests/test_report.py` -> `6 passed`; Ruff check/format passed.
+- [x] `python -m receipts.report runs/20261104T162336-payment_declined-scripted` generated HTML; Chromium screenshot `runs/report-payment-declined.png` inspected at 1920x1080.
+- [x] Source badges, frame filmstrip, scaled boxes, escaped claims, local safe paths, video evidence link and audit hashes implemented. Report excludes its own hash so rerender is stable; regression proves equal SHA-256.
+- Report can show masks supplied as safe local files, but this build does not decode SAM masks. Fixture video is synthetic test media; real episodes have Playwright video.

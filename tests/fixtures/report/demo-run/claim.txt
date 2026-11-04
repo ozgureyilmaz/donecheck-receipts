@@ -1,0 +1,1 @@
+Flight booked. <script>window.claimRan = true</script> & confirmation sent.

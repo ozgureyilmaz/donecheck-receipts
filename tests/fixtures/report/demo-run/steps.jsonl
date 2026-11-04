@@ -1,0 +1,3 @@
+{"idx":0,"t_s":0.0,"ts":"2026-11-04T19:00:00Z","action":"Search Istanbul to London","screenshot":"screens/000.png","dom":"dom/000.html"}
+{"idx":1,"t_s":4.2,"ts":"2026-11-04T19:00:04Z","action":"Enter passenger details","screenshot":"screens/001.png","dom":"dom/001.html"}
+{"idx":2,"t_s":8.4,"ts":"2026-11-04T19:00:08Z","action":"Submit payment","screenshot":"screens/002.png","dom":"dom/002.html"}
