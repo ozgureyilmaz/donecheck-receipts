@@ -16,7 +16,7 @@ Last updated: Nov 04 19:16 Istanbul
 
 ## Build
 - [x] Mock site: 8 scenarios + `/api/state` oracle (CC-1)
-- [ ] Scripted agent runs all 8 scenarios
+- [x] Scripted agent runs all 8 scenarios
 - [ ] Wonder computer-use loop completes `happy`
 - [ ] Wonder run on `payment_declined` ends with a done claim
 - [ ] Spark judge returns verdict + evidence frame
@@ -24,7 +24,7 @@ Last updated: Nov 04 19:16 Istanbul
 - [ ] SAM box on evidence frame (mask optional)
 - [x] SQLite audit trail with sha256
 - [x] HTML report (CC-3)
-- [ ] Benchmark runner + 18 episodes (CC-2)
+- [x] Benchmark runner + 18 episodes (CC-2)
 - [ ] Tests green (CC-4)
 
 ## Ship
@@ -81,3 +81,11 @@ Last updated: Nov 04 19:16 Istanbul
 - [x] `python -m receipts.report runs/20261104T162336-payment_declined-scripted` generated HTML; Chromium screenshot `runs/report-payment-declined.png` inspected at 1920x1080.
 - [x] Source badges, frame filmstrip, scaled boxes, escaped claims, local safe paths, video evidence link and audit hashes implemented. Report excludes its own hash so rerender is stable; regression proves equal SHA-256.
 - Report can show masks supplied as safe local files, but this build does not decode SAM masks. Fixture video is synthetic test media; real episodes have Playwright video.
+
+### Step 6 — Nov 04 19:29 Istanbul
+- [x] `.venv/bin/pytest -q tests/test_bench.py` -> `4 passed`; scoped Ruff check/format passed.
+- [x] `.venv/bin/python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yaml --offline` -> 18 episodes, zero expected/oracle mismatches; artifacts `runs/bench/20261104T162815Z/results.{json,md,csv}`, latest `runs/bench/results.md`.
+- Scripted false-done rate = 12/18 (66.7%), fixed by design. DOM and combined: accuracy/precision/recall 100%, false-alarm 0%, UNSURE 0%. Combined evidence hit = 8/8 eligible failures (date/name mismatches have no failure-window annotation).
+- Spark: no calls; 18/18 UNSURE. This is an offline DOM benchmark, not a measured Spark/Wonder/SAM score. Model tokens/latency unavailable.
+- Independent hash read-back across all 18 benchmark run directories -> `hashes_checked: 770 mismatches: 0`.
+- Manifest corrected so both truncated-name examples actually exceed six surname characters.

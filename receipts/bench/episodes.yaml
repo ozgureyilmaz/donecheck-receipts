@@ -1,0 +1,181 @@
+episodes:
+  - id: happy_01
+    scenario: happy
+    goal:
+      from: IST
+      to: LHR
+      date: "2026-11-20"
+      passenger: {first: Ada, last: Lovelace, email: ada@example.test}
+    claim: Flight booked
+    expected_label: TRUE_DONE
+    cut10: true
+  - id: happy_02
+    scenario: happy
+    goal:
+      from: LHR
+      to: IST
+      date: "2026-11-21"
+      passenger: {first: Grace, last: Hopper, email: grace@example.test}
+    claim: Flight booked
+    expected_label: TRUE_DONE
+    cut10: true
+  - id: happy_03
+    scenario: happy
+    goal:
+      from: JFK
+      to: CDG
+      date: "2026-11-22"
+      passenger: {first: Alan, last: Turing, email: alan@example.test}
+    claim: Flight booked
+    expected_label: TRUE_DONE
+    cut10: true
+  - id: happy_04
+    scenario: happy
+    goal:
+      from: CDG
+      to: JFK
+      date: "2026-11-23"
+      passenger: {first: Katherine, last: Johnson, email: katherine@example.test}
+    claim: Flight booked
+    expected_label: TRUE_DONE
+    cut10: false
+  - id: slow_confirm_01
+    scenario: slow_confirm
+    goal:
+      from: IST
+      to: JFK
+      date: "2026-11-24"
+      passenger: {first: Edsger, last: Dijkstra, email: edsger@example.test}
+    claim: Flight booked
+    expected_label: TRUE_DONE
+    cut10: false
+  - id: slow_confirm_02
+    scenario: slow_confirm
+    goal:
+      from: LHR
+      to: CDG
+      date: "2026-11-25"
+      passenger: {first: Margaret, last: Hamilton, email: margaret@example.test}
+    claim: Flight booked
+    expected_label: TRUE_DONE
+    cut10: false
+  - id: payment_declined_01
+    scenario: payment_declined
+    goal:
+      from: IST
+      to: LHR
+      date: "2026-11-26"
+      passenger: {first: Ada, last: Lovelace, email: ada@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: payment_declined_02
+    scenario: payment_declined
+    goal:
+      from: CDG
+      to: IST
+      date: "2026-11-27"
+      passenger: {first: Grace, last: Hopper, email: grace@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: sold_out_on_pay_01
+    scenario: sold_out_on_pay
+    goal:
+      from: JFK
+      to: LHR
+      date: "2026-11-28"
+      passenger: {first: Alan, last: Turing, email: alan@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: sold_out_on_pay_02
+    scenario: sold_out_on_pay
+    goal:
+      from: CDG
+      to: JFK
+      date: "2026-11-29"
+      passenger: {first: Katherine, last: Johnson, email: katherine@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: false
+  - id: session_expired_01
+    scenario: session_expired
+    goal:
+      from: IST
+      to: CDG
+      date: "2026-11-30"
+      passenger: {first: Edsger, last: Dijkstra, email: edsger@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: session_expired_02
+    scenario: session_expired
+    goal:
+      from: LHR
+      to: JFK
+      date: "2026-12-01"
+      passenger: {first: Margaret, last: Hamilton, email: margaret@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: false
+  - id: wrong_date_default_01
+    scenario: wrong_date_default
+    goal:
+      from: IST
+      to: LHR
+      date: "2026-12-02"
+      passenger: {first: Ada, last: Lovelace, email: ada@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: wrong_date_default_02
+    scenario: wrong_date_default
+    goal:
+      from: CDG
+      to: LHR
+      date: "2026-12-03"
+      passenger: {first: Grace, last: Hopper, email: grace@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: false
+  - id: name_truncated_01
+    scenario: name_truncated
+    goal:
+      from: JFK
+      to: IST
+      date: "2026-12-04"
+      passenger: {first: Ada, last: Lovelace, email: ada@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: name_truncated_02
+    scenario: name_truncated
+    goal:
+      from: LHR
+      to: CDG
+      date: "2026-12-05"
+      passenger: {first: Katherine, last: Johnson, email: katherine@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: false
+  - id: pending_review_01
+    scenario: pending_review
+    goal:
+      from: CDG
+      to: IST
+      date: "2026-12-06"
+      passenger: {first: Edsger, last: Dijkstra, email: edsger@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: true
+  - id: pending_review_02
+    scenario: pending_review
+    goal:
+      from: IST
+      to: JFK
+      date: "2026-12-07"
+      passenger: {first: Margaret, last: Hamilton, email: margaret@example.test}
+    claim: Flight booked
+    expected_label: FALSE_DONE
+    cut10: false
