@@ -20,7 +20,7 @@ Last updated: Nov 04 19:16 Istanbul
 - [ ] Wonder computer-use loop completes `happy`
 - [ ] Wonder run on `payment_declined` ends with a done claim
 - [ ] Spark judge returns verdict + evidence frame
-- [ ] DOM checks + combine rule
+- [x] DOM checks + combine rule
 - [ ] SAM box on evidence frame (mask optional)
 - [x] SQLite audit trail with sha256
 - [ ] HTML report (CC-3)
@@ -66,3 +66,12 @@ Last updated: Nov 04 19:16 Istanbul
 - [x] `.venv/bin/ruff check receipts/audit tests/test_audit_db.py` -> `All checks passed!`.
 - WAL, foreign keys, atomic intent-before-derived writes, hash storage, recursive secret redaction and UPDATE/DELETE rejection on events tested.
 - Integration fixes: step event payload restored; evidence frame/boxes/source aliases supported. No live API proof claimed.
+
+### Steps 3-5 — Nov 04 19:27 Istanbul
+- [x] `.venv/bin/python -m receipts.run --scenario happy --agent scripted --offline` -> Spark `UNSURE`, DOM/combined `TRUE_DONE`, frame 14; run `20261104T162333-happy-scripted`.
+- [x] `.venv/bin/python -m receipts.run --scenario payment_declined --agent scripted --offline` -> Spark `UNSURE`, DOM/combined `FALSE_DONE`, frame 14, source `dom`; run `20261104T162336-payment_declined-scripted`.
+- [x] Hash read-back against actual bytes -> happy `all_hashes_match=True artifacts=41`, declined `all_hashes_match=True artifacts=45`; videos 238071 and 401937 bytes. Evidence DOM contains transient toast; final DOM contains calm summary with no toast.
+- [x] `.venv/bin/pytest -q` -> `66 passed, 1 warning in 12.33s` at this milestone. Tests include a real Chromium declined episode with all artifact hashes checked and oracle absent during judging.
+- [x] DOM checks + combine rule; Spark adapter schema validation/JSON retry; SAM streamed box parser + labeled DOM fallback PNG.
+- `.venv/bin/python -m receipts.run --scenario happy --agent wonder` -> all sources `UNSURE`, exit 2; `agent_failure.json` says Wonder requires key. No live request occurred.
+- Wonder computer-use adapter has local-origin/encoded-oracle-path blocking, bounded turns, action execution and safety-stop tests. Live happy/declined completion remains UNSURE; no masks decoded, no SAM model proof.
