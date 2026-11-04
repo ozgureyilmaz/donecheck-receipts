@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Passenger details · SkyLite Air{% endblock %}
+{% block content %}
+  <p class="eyebrow">Step 2 of 3 · Passenger</p>
+  <h1>Who is travelling?</h1>
+  <p class="intro">Enter the passenger details for {{ state.flight['from'] }} to {{ state.flight['to'] }}.</p>
+  <section class="card">
+    <form method="post" action="/passenger">
+      <div class="grid">
+        <div class="field"><label for="pax-first">First name</label><input id="pax-first" name="first" autocomplete="given-name" data-testid="pax-first" required></div>
+        <div class="field"><label for="pax-last">Last name</label><input id="pax-last" name="last" autocomplete="family-name" data-testid="pax-last" required></div>
+        <div class="field"><label for="pax-email">Email</label><input id="pax-email" name="email" type="email" autocomplete="email" data-testid="pax-email" required></div>
+      </div>
+      <div class="primary-row"><button type="submit" data-testid="pax-submit">Continue to payment</button></div>
+    </form>
+  </section>
+{% endblock %}

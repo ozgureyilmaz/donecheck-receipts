@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Search flights · SkyLite Air{% endblock %}
+{% block content %}
+  <p class="eyebrow">Plan your next trip</p>
+  <h1>Where would you like to go?</h1>
+  <p class="intro">Find a flight and book with confidence.</p>
+  {% if error %}<div class="note" data-receipt="error" role="status">{{ error }}</div>{% endif %}
+  <section class="card" aria-label="Flight search">
+    <form method="post" action="/search">
+      <div class="grid">
+        <div class="field">
+          <label for="search-from">From</label>
+          <select id="search-from" name="from" data-testid="search-from">
+            {% for airport in ["IST", "LHR", "JFK", "CDG"] %}<option value="{{ airport }}" {% if airport == origin %}selected{% endif %}>{{ airport }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="search-to">To</label>
+          <select id="search-to" name="to" data-testid="search-to">
+            {% for airport in ["IST", "LHR", "JFK", "CDG"] %}<option value="{{ airport }}" {% if airport == destination %}selected{% endif %}>{{ airport }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="search-date">Travel date</label>
+          <input id="search-date" name="date" type="date" value="{{ travel_date }}" data-testid="search-date" required>
+        </div>
+        <div class="field">
+          <label for="search-passengers">Passengers</label>
+          <input id="search-passengers" name="passengers" type="number" min="1" max="1" value="1" data-testid="search-passengers" required>
+        </div>
+      </div>
+      <div class="primary-row"><button type="submit" data-testid="search-submit">Search flights</button></div>
+    </form>
+  </section>
+{% endblock %}

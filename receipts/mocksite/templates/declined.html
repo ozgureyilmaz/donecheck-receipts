@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Payment update · SkyLite Air{% endblock %}
+{% block content %}
+  <p class="eyebrow">Payment update</p>
+  <h1>We couldn't complete payment</h1>
+  <div class="toast" data-receipt="error" role="alert">Payment declined. Your card was not charged.</div>
+  <section class="card" aria-label="Returning to your trip summary">
+    <h2>Your trip details are being saved</h2>
+    <p class="intro">You'll see a summary shortly.</p>
+  </section>
+  <script>window.setTimeout(() => { window.location.assign('/summary'); }, 3000);</script>
+{% endblock %}

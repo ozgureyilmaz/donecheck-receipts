@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Trip summary · SkyLite Air{% endblock %}
+{% block content %}
+  <p class="eyebrow">Trip summary</p>
+  <h1>Trip summary</h1>
+  <p class="intro">Your trip details are saved. No booking has been made.</p>
+  <section class="card">
+    <h2>{{ state.flight['from'] }} to {{ state.flight['to'] }}</h2>
+    <dl class="receipt">
+      <dt>Route</dt><dd><span data-receipt="from">{{ state.flight['from'] }}</span> to <span data-receipt="to">{{ state.flight['to'] }}</span></dd>
+      <dt>Travel date</dt><dd data-receipt="date">{{ state.flight['date'] }}</dd>
+      <dt>Passenger</dt><dd><span data-receipt="first">{{ state.passenger['first'] }}</span> <span data-receipt="last">{{ state.passenger['last'] }}</span></dd>
+      <dt>Flight</dt><dd>{{ state.flight['flight_no'] }}</dd>
+    </dl>
+  </section>
+{% endblock %}

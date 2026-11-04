@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Choose a flight · SkyLite Air{% endblock %}
+{% block content %}
+  <p class="eyebrow">Available flights</p>
+  <h1>{{ state.flight['from'] }} to {{ state.flight['to'] }}</h1>
+  <p class="intro">{{ state.flight['date'] }} · {{ passengers }} passenger</p>
+  {% if banner %}<div class="banner" data-receipt="error" role="alert">{{ banner }}</div>{% endif %}
+  <div class="flight-list">
+    {% for flight in flights %}
+      <article class="flight">
+        <div><strong>{{ flight.flight_no }}</strong><small>SkyLite Air · Non-stop</small></div>
+        <div class="timing"><strong>{{ flight.depart }} — {{ flight.arrive }}</strong><small>{{ state.flight['from'] }} to {{ state.flight['to'] }}</small></div>
+        <form method="post" action="/select-flight">
+          <input type="hidden" name="flight_no" value="{{ flight.flight_no }}">
+          <button type="submit" data-testid="select-flight-{{ loop.index0 }}" aria-label="Select {{ flight.flight_no }}">Select · {{ flight.price }}</button>
+        </form>
+      </article>
+    {% endfor %}
+  </div>
+{% endblock %}

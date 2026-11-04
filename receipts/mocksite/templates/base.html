@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}SkyLite Air{% endblock %}</title>
+    <style>
+      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172334; background: #f4f7fb; font-size: 16px; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f7fb; }
+      header { height: 84px; padding: 0 max(32px, calc((100vw - 1060px) / 2)); display: flex; align-items: center; background: #102642; color: white; }
+      .brand { display: flex; align-items: center; gap: 13px; font-weight: 700; font-size: 21px; letter-spacing: .01em; }
+      .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; background: #ffd36a; color: #102642; font-weight: 800; }
+      main { width: min(920px, calc(100% - 48px)); margin: 52px auto 72px; }
+      .eyebrow { margin: 0 0 9px; color: #456481; font-size: 14px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+      h1 { margin: 0; color: #102642; font-size: clamp(30px, 4vw, 42px); line-height: 1.12; letter-spacing: -.025em; }
+      h2 { margin: 0; color: #102642; font-size: 23px; }
+      p { line-height: 1.55; }
+      .intro { margin: 12px 0 28px; color: #506174; font-size: 17px; }
+      .card { padding: 30px; border: 1px solid #dce5ef; border-radius: 18px; background: white; box-shadow: 0 12px 32px #142d4810; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+      .field { display: flex; flex-direction: column; gap: 8px; }
+      .field label { color: #27394d; font-size: 15px; font-weight: 650; }
+      input, select { width: 100%; min-height: 50px; border: 1px solid #9cabbc; border-radius: 9px; padding: 0 14px; background: #fff; color: #15263a; font: inherit; }
+      input:focus, select:focus, button:focus-visible { outline: 3px solid #76b9ff; outline-offset: 2px; }
+      button { min-height: 50px; border: 0; border-radius: 9px; padding: 0 22px; background: #1257a5; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+      button:hover { background: #0c478d; }
+      .primary-row { display: flex; justify-content: flex-end; margin-top: 25px; }
+      .flight-list { display: grid; gap: 13px; margin-top: 25px; }
+      .flight { display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 20px; padding: 21px 22px; border: 1px solid #dce5ef; border-radius: 13px; background: white; }
+      .flight strong { display: block; color: #102642; font-size: 19px; }
+      .flight small { display: block; margin-top: 5px; color: #52667a; font-size: 15px; }
+      .price { color: #102642; font-size: 20px; font-weight: 750; }
+      .banner, .toast, .note, .pending-box { margin: 22px 0; border-radius: 10px; padding: 16px 18px; line-height: 1.45; }
+      .banner { border: 1px solid #d29a20; background: #fff5d9; color: #674900; }
+      .toast { position: fixed; top: 104px; right: max(28px, calc((100vw - 1060px) / 2)); z-index: 2; width: min(440px, calc(100% - 40px)); border: 1px solid #a31d22; background: #a9232b; color: white; box-shadow: 0 12px 34px #1b26384d; font-weight: 650; }
+      .note { border: 1px solid #b7c3d0; background: #edf1f5; color: #465365; }
+      .pending-box { border: 1px solid #d5a43b; background: #fff7e2; color: #503a08; }
+      .receipt { display: grid; grid-template-columns: 155px 1fr; gap: 12px 18px; margin: 24px 0 0; }
+      .receipt dt { color: #54677b; font-weight: 600; }
+      .receipt dd { margin: 0; color: #172334; font-weight: 650; }
+      .confirmation { border-top: 5px solid #188453; }
+      .pnr { margin-top: 24px; padding: 19px 22px; border: 1px dashed #7c93a9; border-radius: 11px; background: #f7fafc; }
+      .pnr small { display: block; color: #4e6276; font-size: 14px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+      .pnr strong { display: block; margin-top: 5px; color: #102642; font-size: 32px; letter-spacing: .12em; }
+      .spinner { width: 50px; height: 50px; border: 5px solid #d6e3f0; border-top-color: #1257a5; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (max-width: 650px) {
+        header { height: 72px; padding: 0 22px; }
+        main { width: min(100% - 32px, 560px); margin-top: 34px; }
+        .card { padding: 22px; }
+        .grid { grid-template-columns: 1fr; gap: 16px; }
+        .flight { grid-template-columns: 1fr auto; gap: 14px; }
+        .flight .timing { grid-column: 1 / -1; }
+        .receipt { grid-template-columns: 105px 1fr; }
+      }
+    </style>
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <header><div class="brand"><span class="brand-mark" aria-hidden="true">S</span>SkyLite Air</div></header>
+    <main>{% block content %}{% endblock %}</main>
+  </body>
+</html>

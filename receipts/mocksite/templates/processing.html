@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Confirming booking · SkyLite Air{% endblock %}
+{% block content %}
+  <section class="card" style="display:flex;align-items:center;gap:24px;min-height:190px" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <div><p class="eyebrow">Payment received</p><h1>Confirming your booking</h1><p class="intro">Please keep this page open while we confirm your flight.</p></div>
+  </section>
+  <script>window.setTimeout(() => { window.location.assign('/complete'); }, 6000);</script>
+{% endblock %}

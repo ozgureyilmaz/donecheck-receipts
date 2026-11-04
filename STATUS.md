@@ -12,10 +12,10 @@ Last updated: Nov 04 19:16 Istanbul
 - [ ] Public repo created, docs pushed
 - [ ] `MODEL_API_KEY` in local `.env`; `GET /v1/status` OK; one Spark call OK
 - [x] Main developer started from the supplied brief; Luna xhigh workers running
-- [ ] CC-1 (mock site) launched
+- [x] Mock site worker completed
 
 ## Build
-- [ ] Mock site: 8 scenarios + `/api/state` oracle (CC-1)
+- [x] Mock site: 8 scenarios + `/api/state` oracle (CC-1)
 - [ ] Scripted agent runs all 8 scenarios
 - [ ] Wonder computer-use loop completes `happy`
 - [ ] Wonder run on `payment_declined` ends with a done claim
@@ -54,3 +54,9 @@ Last updated: Nov 04 19:16 Istanbul
 - Host Python venv ensurepip failed; generated environment repaired with `uv venv --python 3.11 --seed --clear .venv`, then normal pip install succeeded.
 - Dependency reasons: python-multipart parses local mock-site form posts; httpx fetches oracle/status and powers TestClient; Pillow draws evidence PNG box overlays. Other dependencies are the fixed stack.
 - Pending: authenticated Spark, Wonder, SAM and model-list proof; no key available.
+
+### Step 1 — Nov 04 19:23 Istanbul
+- [x] `.venv/bin/pytest -q tests/test_mocksite.py` -> `9 passed, 1 warning in 6.30s` (TestClient deprecation only).
+- [x] `.venv/bin/ruff check receipts/mocksite tests/test_mocksite.py` -> `All checks passed!`; format check -> `6 files already formatted`.
+- [x] `MOCKSITE_PORT=8001 .venv/bin/python -m receipts.mocksite` plus curl -> HTTP 200 text/html; browser declined flow reached `/summary`, screenshot `/tmp/donecheck-mocksite-summary.png`. Process stopped afterward.
+- All eight scenarios implemented; no model calls in this step.

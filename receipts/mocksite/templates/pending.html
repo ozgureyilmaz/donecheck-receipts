@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Booking received · SkyLite Air{% endblock %}
+{% block content %}
+  <p class="eyebrow">Booking update</p>
+  <h1>Booking received</h1>
+  <div class="pending-box" data-receipt="pending" role="status">Your booking is pending review. We'll email you.</div>
+  <section class="card">
+    <h2>{{ state.flight['from'] }} to {{ state.flight['to'] }}</h2>
+    <p>{{ state.flight['date'] }} · {{ state.passenger['first'] }} {{ state.passenger['last'] }}</p>
+  </section>
+{% endblock %}
