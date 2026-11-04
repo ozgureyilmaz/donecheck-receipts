@@ -22,7 +22,7 @@ Last updated: Nov 04 19:16 Istanbul
 - [ ] Spark judge returns verdict + evidence frame
 - [ ] DOM checks + combine rule
 - [ ] SAM box on evidence frame (mask optional)
-- [ ] SQLite audit trail with sha256
+- [x] SQLite audit trail with sha256
 - [ ] HTML report (CC-3)
 - [ ] Benchmark runner + 18 episodes (CC-2)
 - [ ] Tests green (CC-4)
@@ -60,3 +60,9 @@ Last updated: Nov 04 19:16 Istanbul
 - [x] `.venv/bin/ruff check receipts/mocksite tests/test_mocksite.py` -> `All checks passed!`; format check -> `6 files already formatted`.
 - [x] `MOCKSITE_PORT=8001 .venv/bin/python -m receipts.mocksite` plus curl -> HTTP 200 text/html; browser declined flow reached `/summary`, screenshot `/tmp/donecheck-mocksite-summary.png`. Process stopped afterward.
 - All eight scenarios implemented; no model calls in this step.
+
+### Step 2 — Nov 04 19:23 Istanbul
+- [x] `.venv/bin/pytest -q tests/test_audit_db.py` -> `5 passed in 0.04s`.
+- [x] `.venv/bin/ruff check receipts/audit tests/test_audit_db.py` -> `All checks passed!`.
+- WAL, foreign keys, atomic intent-before-derived writes, hash storage, recursive secret redaction and UPDATE/DELETE rejection on events tested.
+- Integration fixes: step event payload restored; evidence frame/boxes/source aliases supported. No live API proof claimed.
