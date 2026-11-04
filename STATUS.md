@@ -8,7 +8,7 @@ Last updated: Nov 04 19:40 Istanbul
 ## Setup
 - [x] Repo name chosen: `donecheck-receipts` (free on GitHub at 18:59 Istanbul)
 - [x] Docs pack written (AGENTS, README, PLAN, ROADMAP, HACKATHON, LINKS, EVAL, DEMO, SUBMISSION, STATUS, TASKS, PROMPT)
-- [ ] Ozgur confirmed repo name
+- [x] Ozgur confirmed repo name at 19:02 Istanbul (confirmed by user)
 - [x] Public repo confirmed; code/docs pushed to origin/main
 - [ ] `MODEL_API_KEY` in local `.env`; `GET /v1/status` OK; one Spark call OK
 - [x] Main developer started from the supplied brief; Luna xhigh workers running
