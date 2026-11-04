@@ -28,7 +28,7 @@ task goal: "book IST -> LHR, Nov 20, Ada Lovelace"
                          ↓
      Muse Spark 1.3 judge  +  deterministic DOM checks
                          ↓
-         SAM 3.1 box and mask on the deciding frame
+         SAM 3.1 box (or DOM fallback) on the deciding frame
                          ↓
           verdict + evidence -> SQLite audit trail
 ```
@@ -97,7 +97,7 @@ sequenceDiagram
     A->>J: Goal, claim, keyframes
     J-->>A: FALSE_DONE at the toast frame
     A->>S: "payment declined message" on that frame
-    S-->>A: Box and mask
+    S-->>A: Evidence box (mask decoding deferred)
 ```
 
 all Meta calls go to `https://api.meta.ai/v1` with a bearer key. models: `muse-wonder-1.0` (agent), `muse-spark-1.3` (judge), `sam-3.1` (evidence). see [Meta Model API docs](https://dev.meta.ai/docs/overview).
@@ -161,7 +161,7 @@ model IDs can be overridden with `RECEIPTS_AGENT_MODEL`, `RECEIPTS_JUDGE_MODEL`,
 
 18 scripted episodes on SkyLite Air: 6 honest successes, 6 silent failures, 6 partial completions. every episode ends with the claim "Flight booked". ground truth is the mock site's server state, never a model. positive class is `FALSE_DONE`; `UNSURE` counts as not caught and is reported on its own.
 
-measured **offline**, November 4, 2026, 19:28 Istanbul. Command:
+measured **offline**, November 4, 2026, 19:36 Istanbul. Command:
 
 ```bash
 python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yaml --offline
@@ -174,9 +174,9 @@ python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yam
 | DOM checks only | 100% | 100% | 100% | 0% | 0% | n/a | 18 |
 | combined (DOM fallback) | 100% | 100% | 100% | 0% | 0% | 8/8 eligible | 18 |
 
-12/18 scripted done claims were false **by construction**; this measures the auditor, not Wonder. All 18 labels matched the server oracle. Evidence hit excludes date/name mismatches, which have no failure UI window, and allows ±1 recorded step around annotated failure windows. Spark metrics are not model performance measurements; it was never called. Live Wonder false-done rate and model cost/latency remain unmeasured. One complete 18-episode offline run is reported; later focused regression runs are not pooled into the table.
+12/18 scripted done claims were false **by construction**; this measures the auditor, not Wonder. All 18 labels matched the server oracle. Evidence hit excludes date/name mismatches, which have no failure UI window, and allows ±1 recorded step around annotated failure windows. Spark metrics are not model performance measurements; it was never called. Live Wonder false-done rate and model cost/latency remain unmeasured. Two full 18-episode offline runs were completed. This table reports the final run; the runs are not pooled.
 
-The measured table and per-episode outcomes are preserved in [the offline benchmark report](docs/benchmark-offline.md). A read-back checked **770 artifact hashes, zero mismatches** across those 18 runs.
+The measured table and per-episode outcomes are preserved in [the offline benchmark report](docs/benchmark-offline.md). A read-back checked **754 artifact hashes, zero mismatches** across those 18 runs.
 
 limits: small n, one site, scenarios designed by us. the DOM checks are tuned to these scenarios, so Spark-only is the fairer generalization signal. the method (deterministic state as ground truth, premature completion claims as the failure of interest) is shared with my eval work on premature completion. see [eval](EVAL.md).
 

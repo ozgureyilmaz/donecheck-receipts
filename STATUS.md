@@ -3,13 +3,13 @@
 Update the box, the time (Istanbul) and a one-line proof (command output, PR link) when ticking. No proof, no tick.
 Deadline: Nov 5 05:00 Istanbul = Nov 4 9:00 PM ET.
 
-Last updated: Nov 04 19:16 Istanbul
+Last updated: Nov 04 19:40 Istanbul
 
 ## Setup
 - [x] Repo name chosen: `donecheck-receipts` (free on GitHub at 18:59 Istanbul)
 - [x] Docs pack written (AGENTS, README, PLAN, ROADMAP, HACKATHON, LINKS, EVAL, DEMO, SUBMISSION, STATUS, TASKS, PROMPT)
 - [ ] Ozgur confirmed repo name
-- [ ] Public repo created, docs pushed
+- [x] Public repo confirmed; code/docs pushed to origin/main
 - [ ] `MODEL_API_KEY` in local `.env`; `GET /v1/status` OK; one Spark call OK
 - [x] Main developer started from the supplied brief; Luna xhigh workers running
 - [x] Mock site worker completed
@@ -29,12 +29,12 @@ Last updated: Nov 04 19:16 Istanbul
 
 ## Ship
 - [ ] Feature freeze (01:30)
-- [ ] README results table filled with real numbers
-- [ ] Quickstart verified on a fresh clone
+- [x] README results table filled with real offline numbers and model limitations
+- [x] Quickstart verified on a fresh clone (documented Mac venv workaround)
 - [ ] Demo GIF in README
 - [ ] Video recorded, <= 3:00 (target 03:00)
 - [ ] Video uploaded, link works logged out
-- [ ] Repo public, license file present (MIT unless rules say otherwise)
+- [x] Repo public, MIT license file present
 - [ ] Real form questions pasted into SUBMISSION.md
 - [ ] Ozgur OK to submit
 - [ ] Form submitted (target 04:00), confirmation saved
@@ -95,3 +95,17 @@ Last updated: Nov 04 19:16 Istanbul
 - GitHub Actions configured for Python 3.11, editable install, Chromium, Ruff and pytest without model credentials; hosted execution pending at this point.
 - Review fixes: card field masked and stored PAN/CVC redacted; action budget enforced cumulatively; deterministic false-done retained after recording failure; matching DOM/screenshot capture retried when a transient UI changes; date/name failures highlight mismatched fields; standalone site reads .env config.
 - Repeated full offline benchmark is running after these changes; it will be reported separately as a regression, not pooled to inflate n.
+
+### Step 9 / delivery — Nov 04 19:40 Istanbul
+- [x] README quickstart, model availability, scope limits, benchmark table and MIT license updated. No mask-decoding or live-model success is claimed.
+- [x] Final full regression: `.venv/bin/python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yaml --offline` -> exit 0; 18 episodes, 12/18 constructed false-dones, zero oracle mismatches, DOM/combined 100% precision/recall with zero false alarms; Spark 18/18 UNSURE, not called.
+- Final run `runs/bench/20261104T163650Z/results.{json,md,csv}`; all 754 artifacts matched registered SHA-256 and byte size; no missing/unregistered files. All 18 step logs excluded full test-card number. Two complete offline runs were performed; README shows the final run, not pooled results.
+- [x] Fresh remote clone at `b219a4f` -> editable install, Chromium install, Ruff lint/format, `83 passed, 1 warning in 15.25s`, declined demo `FALSE_DONE`, clean Git status. Proving log: `runs/verification/fresh-clone.log`. macOS venv workaround from README used; no credential copied.
+- [x] Hosted CI on code commit `8a90483`: `83 passed, 1 warning in 12.37s`, Ruff passed. https://github.com/ozgureyilmaz/donecheck-receipts/actions/runs/41869039473
+- [x] Exact default command `.venv/bin/python -m receipts.run --scenario payment_declined --agent scripted` -> Spark UNSURE, DOM/combined FALSE_DONE, evidence frame 13, source dom; `runs/20261104T163838-payment_declined-scripted/report.html`. All 43 hashes match; report rerender hash stable. Preview: `runs/demo-report-final.png`.
+
+## Remaining work / not performed
+- Live Wonder happy/declined, authenticated Spark and SAM, and model listing: UNSURE, no MODEL_API_KEY/META_API_KEY was available. Status endpoint alone returned HTTP 200. Adapters and offline protocol/safety tests do not prove live integration.
+- SAM mask decoding omitted; current offline highlights come from DOM boxes. Live Wonder set and measured model cost/latency are unmeasured.
+- Demo GIF/video recording/upload, actual submission-question verification, form submission, and release tag were not performed. The submission form and social channels were not touched.
+- Hosted CI has one non-failing Starlette TestClient/httpx deprecation warning.
