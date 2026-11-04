@@ -139,6 +139,7 @@ async def run_wonder(
         ],
     }
     async with model_client(config) as client:
+        actions_executed = 0
         for turn in range(config.max_steps + 1):
             response = await client.responses.create(**request)
             raw = response.model_dump(mode="json")
@@ -149,6 +150,8 @@ async def run_wonder(
             if not calls:
                 await recorder.capture({"type": "final_claim"})
                 return response.output_text
+            if len(calls) != 1:
+                raise AgentStopped("Expected at most one computer call per response")
             if turn == config.max_steps:
                 raise AgentStopped("Step budget reached")
             outputs = []
@@ -161,8 +164,11 @@ async def run_wonder(
                 if not isinstance(actions, list) or len(actions) > 50:
                     raise AgentStopped("Invalid or excessive action batch")
                 for action in actions:
+                    if actions_executed >= config.max_steps:
+                        raise AgentStopped("Action step budget reached")
                     before = page.url
                     await execute_action(page, action)
+                    actions_executed += 1
                     await page.wait_for_timeout(100)
                     if blocked or not allowed_url(page.url, config.mocksite_port):
                         recorder.db.event(recorder.run_id, "blocked_navigation", blocked)

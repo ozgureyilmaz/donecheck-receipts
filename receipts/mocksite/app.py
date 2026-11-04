@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import os
 import secrets
 import time
 from datetime import date, timedelta
@@ -378,8 +377,11 @@ def _local_host(value: str) -> str:
 def main() -> None:
     import uvicorn
 
-    host = _local_host(os.getenv("MOCKSITE_HOST", "127.0.0.1"))
-    port = int(os.getenv("MOCKSITE_PORT", "8000"))
+    from receipts.config import load_config
+
+    config = load_config()
+    host = _local_host(config.mocksite_host)
+    port = config.mocksite_port
     uvicorn.run("receipts.mocksite.app:app", host=host, port=port, reload=False)
 
 

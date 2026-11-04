@@ -17,7 +17,7 @@ from receipts.agent.recorder import Recorder
 from receipts.agent.scripted_agent import run_scripted
 from receipts.agent.wonder_driver import install_local_boundary, run_wonder
 from receipts.audit.db import AuditDB, redact
-from receipts.auditor.dom_checks import check_dom
+from receipts.auditor.dom_checks import check_dom, claims_done
 from receipts.auditor.keyframes import pick_keyframes
 from receipts.auditor.sam_evidence import make_evidence
 from receipts.auditor.spark_judge import judge
@@ -25,6 +25,18 @@ from receipts.auditor.verdict import combine
 from receipts.common import normalize_goal, utc_now, write_json
 from receipts.config import Config, load_config
 from receipts.mocksite.scenarios import SCENARIOS
+
+
+def _apply_agent_failure(combined: dict, dom: dict, claim: str, failure: dict | None) -> dict:
+    """Keep DOM's deterministic false-done result when it contradicts a done claim."""
+    if failure and not (dom.get("verdict") == "FALSE_DONE" and claims_done(claim)):
+        return {
+            **combined,
+            "verdict": "UNSURE",
+            "source": "agent_failure",
+            "rationale": failure["reason"],
+        }
+    return combined
 
 
 @contextmanager
@@ -161,13 +173,7 @@ async def _episode(
         frames = pick_keyframes(run_dir, steps)
         spark = await judge(run_dir, goal, claim, frames, config, offline)
         combined = combine(spark, dom)
-        if failure:
-            combined = {
-                **combined,
-                "verdict": "UNSURE",
-                "source": "agent_failure",
-                "rationale": failure["reason"],
-            }
+        combined = _apply_agent_failure(combined, dom, claim, failure)
         verdict = {
             "spark": spark,
             "dom": dom,

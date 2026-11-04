@@ -12,7 +12,8 @@ async def run_scripted(page: Page, recorder: Recorder, goal: dict) -> str:
             await control.select_option(value)
         else:
             await control.fill(value)
-        await recorder.capture({"type": "fill", "control": testid, "value": value})
+        stored_value = "[REDACTED]" if testid in {"pay-cvc", "pay-exp"} else value
+        await recorder.capture({"type": "fill", "control": testid, "value": stored_value})
 
     async def click(testid: str) -> None:
         await page.get_by_test_id(testid).click()

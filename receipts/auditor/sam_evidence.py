@@ -104,7 +104,12 @@ async def make_evidence(
             evidence["sam_status"] = f"unavailable:{type(exc).__name__}"
     if not boxes:
         markers = frame.get("receipt_boxes", {})
-        keys = ("error", "pending", "pnr", "date", "last")
+        marker = verdict.get("evidence_marker")
+        keys = (
+            (marker,)
+            if "evidence_marker" in verdict
+            else ("error", "pending", "pnr", "date", "last")
+        )
         candidate = next((markers[key] for key in keys if markers.get(key)), None)
         if candidate:
             boxes = [candidate]

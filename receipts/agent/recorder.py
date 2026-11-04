@@ -27,20 +27,27 @@ class Recorder:
 
     async def capture(self, action: dict, changed_only: bool = False) -> dict | None:
         async with self.lock:
-            html = await self.page.content()
-            digest = hashlib.sha256(html.encode()).hexdigest()
-            if changed_only and digest == self.last_dom_hash:
-                return None
             idx = len(self.steps)
             screen = f"screens/{idx:03d}.png"
             dom = f"dom/{idx:03d}.html"
-            await self.page.screenshot(path=str(self.run_dir / screen), animations="disabled")
-            t_s, ts = round(time.monotonic() - self.started, 4), utc_now()
-            # Record only visible element geometry, in screenshot pixel coordinates.
-            boxes = await self.page.locator("[data-receipt]").evaluate_all("""els => Object.fromEntries(els.map(el => {
-                const r = el.getBoundingClientRect(), s = getComputedStyle(el);
-                return [el.dataset.receipt, {x1:Math.max(0,r.left),y1:Math.max(0,r.top),x2:Math.min(innerWidth,r.right),y2:Math.min(innerHeight,r.bottom),w:innerWidth,h:innerHeight,visible:r.width>0&&r.height>0&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth&&s.visibility!=='hidden'&&s.display!=='none'}];
-            }).filter(([,v])=>v.visible))""")
+            for attempt in range(3):
+                html = await self.page.content()
+                digest = hashlib.sha256(html.encode()).hexdigest()
+                if changed_only and digest == self.last_dom_hash:
+                    return None
+                await self.page.screenshot(path=str(self.run_dir / screen), animations="disabled")
+                t_s, ts = round(time.monotonic() - self.started, 4), utc_now()
+                # Record only visible element geometry, in screenshot pixel coordinates.
+                boxes = await self.page.locator("[data-receipt]").evaluate_all("""els => Object.fromEntries(els.map(el => {
+                    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+                    return [el.dataset.receipt, {x1:Math.max(0,r.left),y1:Math.max(0,r.top),x2:Math.min(innerWidth,r.right),y2:Math.min(innerHeight,r.bottom),w:innerWidth,h:innerHeight,visible:r.width>0&&r.height>0&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth&&s.visibility!=='hidden'&&s.display!=='none'}];
+                }).filter(([,v])=>v.visible))""")
+                if html == await self.page.content():
+                    break
+                if attempt == 2:
+                    raise RuntimeError(
+                        "DOM changed during screenshot; refusing mismatched evidence"
+                    )
             (self.run_dir / dom).write_text(redact(html))
             step = {
                 "idx": idx,

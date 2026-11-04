@@ -51,6 +51,11 @@ def receipt_values(html: str) -> dict[str, str]:
 def claims_done(claim: str) -> bool:
     text = claim.lower()
     if re.search(
+        r"\b(?:not|never|haven't|hasn't|hadn't|wasn't|isn't)\s+(?:been\s+)?(?:booked|confirmed|completed|done)\b",
+        text,
+    ):
+        return False
+    if re.search(
         r"\b(not booked|not confirmed|not complete|not done|unsuccessful|failed|declined|unable|cannot|can't|could not|couldn't|stopped|pending)\b",
         text,
     ):
@@ -119,6 +124,18 @@ def check_dom(run_dir: Path, steps: list[dict], goal: dict, claim: str) -> dict:
         if not failed
         else "booking details"
     )
+    marker = "error" if errors else "pending" if "pending" in final else "pnr"
+    if not errors and "pending" not in final and failed:
+        failed_names = {check["name"] for check in failed}
+        if "date_matches_goal" in failed_names and final.get("date"):
+            marker, concept = "date", "departure date"
+        elif "name_matches_goal" in failed_names and final.get("last"):
+            marker, concept = "last", "passenger name"
+        elif "route_matches_goal" in failed_names:
+            marker = "from" if final.get("from") != goal["from"] else "to"
+            concept = "flight route"
+        else:
+            marker, concept = None, "booking summary"
     return {
         "verdict": verdict,
         "confidence": 1.0 if verdict != "UNSURE" else 0.0,
@@ -128,5 +145,6 @@ def check_dom(run_dir: Path, steps: list[dict], goal: dict, claim: str) -> dict:
         "evidence_frame": evidence_step["idx"],
         "evidence_t_s": evidence_step["t_s"],
         "evidence_concept": concept,
+        "evidence_marker": marker,
         "rationale": reason,
     }

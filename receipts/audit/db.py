@@ -17,12 +17,14 @@ from typing import Any
 _REDACTED = "[REDACTED]"
 _SENSITIVE_KEY = re.compile(
     r"(?:authorization|(?:model|meta)?[_-]?api[_-]?key|access[_-]?token|"
-    r"refresh[_-]?token|secret|password|credential)",
+    r"refresh[_-]?token|secret|password|credential|cvc|cvv|security[_-]?code|"
+    r"card(?:[_-]?(?:number|no|pan))?)",
     re.IGNORECASE,
 )
 _AUTHORIZATION_VALUE = re.compile(r"(?i)(\bauthorization\s*[:=]\s*)(?:bearer\s+)?([^\s,;\"'<>]+)")
 _BEARER_VALUE = re.compile(r"(?i)\bbearer\s+[^\s,;\"'<>]+")
 _SK_VALUE = re.compile(r"(?i)\bsk-[A-Za-z0-9_-]+")
+_CARD_NUMBER = re.compile(r"(?<![A-Za-z0-9])(?:[0-9][ -]?){12,18}[0-9](?![A-Za-z0-9])")
 
 
 def _configured_secrets() -> tuple[str, ...]:
@@ -35,6 +37,10 @@ def _redact_string(value: str) -> str:
     redacted = _AUTHORIZATION_VALUE.sub(lambda match: match.group(1) + _REDACTED, value)
     redacted = _BEARER_VALUE.sub("Bearer " + _REDACTED, redacted)
     redacted = _SK_VALUE.sub(_REDACTED, redacted)
+    redacted = _CARD_NUMBER.sub(
+        lambda match: f"[CARD ending {re.sub(r'[^0-9]', '', match.group(0))[-4:]}]",
+        redacted,
+    )
     for secret in _configured_secrets():
         redacted = redacted.replace(secret, _REDACTED)
     return redacted
@@ -43,9 +49,10 @@ def _redact_string(value: str) -> str:
 def redact(value: Any) -> Any:
     """Recursively redact API credentials and bearer-like values.
 
-    Mapping values under credential-shaped keys are replaced wholesale. Strings
-    are scrubbed for Authorization headers, bearer tokens, ``sk-`` values, and
-    the configured ``MODEL_API_KEY`` / ``META_API_KEY`` values.
+    Mapping values under credential-shaped keys, including card and CVC fields,
+    are replaced wholesale. Strings are scrubbed for Authorization headers,
+    bearer tokens, ``sk-`` values, configured API keys, and 13-19 digit card
+    numbers; card numbers retain only their last four digits.
     """
     if isinstance(value, str):
         return _redact_string(value)

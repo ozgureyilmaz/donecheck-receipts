@@ -40,6 +40,8 @@ def test_declined_episode_keeps_transient_evidence_and_final_hashes(tmp_path, mo
     assert (run_dir / "video.webm").stat().st_size > 1000
     assert (run_dir / "evidence_overlay.png").exists()
     assert (run_dir / "report.html").exists()
+    assert "4242424242424242" not in (run_dir / "steps.jsonl").read_text()
+    assert 'type="password"' in (run_dir / "dom/010.html").read_text()
     with sqlite3.connect(database) as conn:
         rows = conn.execute(
             "SELECT path,sha256 FROM artifacts WHERE run_id=?", (run_dir.name,)

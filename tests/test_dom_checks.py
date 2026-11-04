@@ -58,3 +58,22 @@ def test_parser_ignores_hidden_errors_and_keeps_nested_visible_text():
     ) == {"pnr": "ABCDEF"}
     assert not claims_done("Booking is pending review")
     assert claims_done("Flight booked, confirmation sent")
+    assert not claims_done("I haven't booked the flight")
+
+
+@pytest.mark.parametrize(
+    "override,marker,concept",
+    [
+        ({"date": "2026-11-21"}, "date", "departure date"),
+        ({"last": "Lovela"}, "last", "passenger name"),
+    ],
+)
+def test_partial_completion_points_at_mismatched_field(tmp_path, override, marker, concept):
+    result = check_dom(
+        tmp_path,
+        [observation(tmp_path, 0, confirmed(**override))],
+        normalize_goal(),
+        "Flight booked",
+    )
+    assert result["evidence_marker"] == marker
+    assert result["evidence_concept"] == concept

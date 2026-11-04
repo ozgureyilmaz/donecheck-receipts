@@ -144,6 +144,45 @@ def test_secrets_are_recursively_redacted_before_storage(
             assert secret not in all_text
 
 
+def test_pan_redaction_preserves_last_four_and_does_not_rewrite_hashes_or_run_ids(
+    tmp_path: Path,
+) -> None:
+    run_id = "20261104T162815-payment_declined-scripted"
+    digest = "0" * 64
+    value = {
+        "action": "fill card 4242424242424242 then 4242 4242-4242 4242",
+        "nested": [{"card_number": "4242424242424242", "cvc": "123"}],
+        "run_id": run_id,
+        "sha256": digest,
+        "long_number": "12345678901234567890",
+        "embedded": "x4111111111111111x",
+    }
+
+    redacted = redact(value)
+    assert redacted["action"] == "fill card [CARD ending 4242] then [CARD ending 4242]"
+    assert redacted["nested"] == [{"card_number": "[REDACTED]", "cvc": "[REDACTED]"}]
+    assert redacted["run_id"] == run_id
+    assert redacted["sha256"] == digest
+    assert redacted["long_number"] == "12345678901234567890"
+    assert redacted["embedded"] == "x4111111111111111x"
+
+    with AuditDB(tmp_path / "audit.sqlite") as db:
+        db.start_run(run_id, "happy", "scripted", "Book flight", "2026-11-04T12:00:00Z")
+        db.event(run_id, "action", value)
+        event_payload = db._conn.execute(
+            "SELECT payload_json FROM events WHERE kind='action'"
+        ).fetchone()[0]
+        assert "4242424242424242" not in event_payload
+        assert "[CARD ending 4242]" in event_payload
+        assert digest in event_payload
+        assert run_id in event_payload
+
+
+def test_payment_card_input_is_masked_in_browser() -> None:
+    template = Path("receipts/mocksite/templates/payment.html").read_text(encoding="utf-8")
+    assert 'id="pay-card" name="card_number" type="password"' in template
+
+
 def test_run_end_verdict_evidence_and_artifact_writes(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs" / "run-1"
     run_dir.mkdir(parents=True)

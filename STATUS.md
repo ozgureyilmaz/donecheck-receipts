@@ -25,7 +25,7 @@ Last updated: Nov 04 19:16 Istanbul
 - [x] SQLite audit trail with sha256
 - [x] HTML report (CC-3)
 - [x] Benchmark runner + 18 episodes (CC-2)
-- [ ] Tests green (CC-4)
+- [x] Tests green (CC-4)
 
 ## Ship
 - [ ] Feature freeze (01:30)
@@ -89,3 +89,9 @@ Last updated: Nov 04 19:16 Istanbul
 - Spark: no calls; 18/18 UNSURE. This is an offline DOM benchmark, not a measured Spark/Wonder/SAM score. Model tokens/latency unavailable.
 - Independent hash read-back across all 18 benchmark run directories -> `hashes_checked: 770 mismatches: 0`.
 - Manifest corrected so both truncated-name examples actually exceed six surname characters.
+
+### Step 8 / final integration fixes — Nov 04 19:36 Istanbul
+- [x] `.venv/bin/ruff check .` -> `All checks passed!`; `.venv/bin/ruff format --check .` -> `54 files already formatted`; `.venv/bin/pytest -q` -> `83 passed, 1 warning in 14.26s`; `git diff --check` clean.
+- GitHub Actions configured for Python 3.11, editable install, Chromium, Ruff and pytest without model credentials; hosted execution pending at this point.
+- Review fixes: card field masked and stored PAN/CVC redacted; action budget enforced cumulatively; deterministic false-done retained after recording failure; matching DOM/screenshot capture retried when a transient UI changes; date/name failures highlight mismatched fields; standalone site reads .env config.
+- Repeated full offline benchmark is running after these changes; it will be reported separately as a regression, not pooled to inflate n.
