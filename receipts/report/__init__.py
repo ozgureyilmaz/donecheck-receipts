@@ -221,6 +221,7 @@ def render_report(run_dir: Path | str, db_path: Path | str | None = None) -> Pat
     database = Path(db_path).expanduser() if db_path is not None else Path("runs/receipts.sqlite")
     verdict_data = _read_json(root / "verdict.json")
     evidence = _read_json(root / "evidence.json")
+    metadata = _read_json(root / "metadata.json")
     steps = _read_steps(root / "steps.jsonl")
     run_id = root.name
 
@@ -331,6 +332,9 @@ def render_report(run_dir: Path | str, db_path: Path | str | None = None) -> Pat
     template = _make_env().get_template("report.html")
     context = dict(
         run_id=run_id,
+        actor_model=(metadata.get("models") or {}).get("agent")
+        if metadata.get("agent") == "wonder"
+        else None,
         goal=goal,
         claim=claim or "No agent claim captured.",
         sources=sources,

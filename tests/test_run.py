@@ -70,6 +70,7 @@ def test_strict_live_stops_before_next_provider_call(tmp_path, monkeypatch, fail
     async def wonder(page, recorder, goal, config, blocked):
         calls.append("wonder")
         assert config.max_steps == 30
+        assert config.agent_model == "muse-spark-1.3"
         if failed_stage == "wonder":
             raise RuntimeError("simulated provider failure")
         return await run_scripted(page, recorder, goal)
@@ -93,9 +94,16 @@ def test_strict_live_stops_before_next_provider_call(tmp_path, monkeypatch, fail
     monkeypatch.setattr("receipts.run.run_wonder", wonder)
     monkeypatch.setattr("receipts.run.judge", spark)
     monkeypatch.setattr("receipts.run.make_evidence", evidence)
-    run = run_episode("payment_declined", "wonder", strict_live=True, runs_dir=tmp_path / "runs")
+    run = run_episode(
+        "payment_declined",
+        "wonder",
+        strict_live=True,
+        actor_model="muse-spark-1.3",
+        runs_dir=tmp_path / "runs",
+    )
     failure = json.loads((run / "live_failure.json").read_text())
     assert failure["stage"] == failed_stage
     assert calls == (["wonder"] if failed_stage == "wonder" else ["wonder", "spark"])
     assert (run / "report.html").is_file()
+    assert "Actor muse-spark-1.3" in (run / "report.html").read_text()
     assert (run / "oracle.json").is_file()

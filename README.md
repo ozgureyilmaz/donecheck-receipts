@@ -8,7 +8,7 @@ Receipts (DoneCheck v2) is built for the [Meta Global AI Developer Hackathon](ht
 
 the first-run path is deliberately local: a mock site on `127.0.0.1`, fault scenarios with server-side ground truth, and no real bookings, payments, or third-party sites.
 
-> **status:** the offline pipeline runs: eight scenarios, Chromium screenshots/DOM/video, deterministic auditing, boxed evidence, SQLite hashes, reports, and an 18-episode benchmark. No API key was available during verification: Wonder, Spark, and SAM live behavior is **UNSURE**. Spark returns `UNSURE` offline; highlights are explicitly labeled `dom`. SAM masks are not decoded. See [status and exact proving outputs](STATUS.md).
+> **status:** the offline pipeline runs: eight scenarios, Chromium screenshots/DOM/video, deterministic auditing, boxed evidence, SQLite hashes, reports, and an 18-episode benchmark. Authenticated Spark smoke and the Spark computer tool probe passed. Wonder computer-use requests returned HTTP 400 on the tested account. The live Spark browser run stopped at a provider safety confirmation. Spark returns `UNSURE` offline; highlights are explicitly labeled `dom`. SAM masks are not decoded. See [status and exact proving outputs](STATUS.md).
 
 <!-- PLACEHOLDER: demo GIF (docs/assets/demo.gif) after the demo run is recorded -->
 <!-- PLACEHOLDER: 3-minute demo video link after upload -->
@@ -151,7 +151,14 @@ the run writes, under `runs/<run_id>/`:
 - `oracle.json` with the server state, for scoring only;
 - `report.html`.
 
-to enable the model path, set `MODEL_API_KEY` in `.env`, run `python scripts/smoke_api.py`, then omit `--offline`. A scripted run calls Spark and SAM; `--agent wonder` also calls the computer-use model. With no key, scripted runs use the offline fallback automatically and Wonder exits 2 with an explicit failure artifact. Responses are saved redacted, provider errors are not automatically retried, and pending safety checks stop the episode.
+to enable the model path, set `MODEL_API_KEY` in `.env`, run `python scripts/smoke_api.py`, then omit `--offline`. A scripted run calls Spark and SAM; `--agent wonder` also calls the computer-use model. With no key, scripted runs use the offline fallback automatically and Wonder exits 2 with an explicit failure artifact. Responses are saved redacted, provider errors are not automatically retried, and pending safety checks stop the episode. Model calls save usage and estimated cost to `usage.json`.
+
+Use `--actor-model` to select the computer-use model. This command selects Spark for the strict live check.
+
+```bash
+python -m receipts.run --scenario payment_declined --agent wonder --actor-model muse-spark-1.3 --strict-live
+```
+
 
 if this Mac's uv-managed Python fails during `python3.11 -m venv`/`ensurepip`, the verified local workaround is `uv venv --python 3.11 --seed .venv`; then use the same pip install command. Standard Python 3.11 is used by CI.
 
@@ -174,7 +181,7 @@ python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yam
 | DOM checks only | 100% | 100% | 100% | 0% | 0% | n/a | 18 |
 | combined (DOM fallback) | 100% | 100% | 100% | 0% | 0% | 8/8 eligible | 18 |
 
-12/18 scripted done claims were false **by construction**; this measures the auditor, not Wonder. All 18 labels matched the server oracle. Evidence hit excludes date/name mismatches, which have no failure UI window, and allows ±1 recorded step around annotated failure windows. Spark metrics are not model performance measurements; it was never called. Live Wonder false-done rate and model cost/latency remain unmeasured. Two full 18-episode offline runs were completed. This table reports the final run; the runs are not pooled.
+12/18 scripted done claims were false **by construction**; this measures the auditor, not Wonder. All 18 labels matched the server oracle. Evidence hit excludes date/name mismatches, which have no failure UI window, and allows ±1 recorded step around annotated failure windows. The benchmark used no live model calls, so its Spark column does not measure model performance. Live Wonder false-done rate and model cost/latency remain unmeasured. Two full 18-episode offline runs were completed. This table reports the final run; the runs are not pooled.
 
 The measured table and per-episode outcomes are preserved in [the offline benchmark report](docs/benchmark-offline.md). A read-back checked **754 artifact hashes, zero mismatches** across those 18 runs.
 

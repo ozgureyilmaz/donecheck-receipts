@@ -3,7 +3,7 @@
 Update the box, the time (Istanbul) and a one-line proof (command output, PR link) when ticking. No proof, no tick.
 Deadline: Nov 5 05:00 Istanbul = Nov 4 9:00 PM ET.
 
-Last updated: Nov 05 14:55 Istanbul
+Last updated: Nov 05 15:11 Istanbul
 
 ## Setup
 - [x] Repo name chosen: `donecheck-receipts` (free on GitHub at 18:59 Istanbul)
@@ -105,16 +105,32 @@ Last updated: Nov 05 14:55 Istanbul
 - [x] Exact default command `.venv/bin/python -m receipts.run --scenario payment_declined --agent scripted` -> Spark UNSURE, DOM/combined FALSE_DONE, evidence frame 13, source dom; `runs/20261104T163838-payment_declined-scripted/report.html`. All 43 hashes match; report rerender hash stable. Preview: `runs/demo-report-final.png`.
 
 ## Remaining work / not performed
-- Authenticated smoke passed. Live judging, SAM evidence, and the happy path remain unverified because Meta rejected the first Wonder computer-use request. See the live verification log below.
+- Authenticated smoke and the Spark computer tool probe passed. The live browser run stopped at a provider safety check. Spark judging, SAM evidence, and the happy path remain unverified.
 - SAM mask decoding omitted; current offline highlights come from DOM boxes. Live Wonder set and measured model cost/latency are unmeasured.
 - Demo GIF/video recording/upload, actual submission-question verification, form submission, and release tag were not performed. The submission form and social channels were not touched.
 - Hosted CI has one non-failing Starlette TestClient/httpx deprecation warning.
 
 ## Live verification
 
-- Nov 05 14:50 Istanbul: `.venv/bin/python scripts/smoke_api.py` exited 0. Status HTTP 200, Spark `ready`, and models included `muse-spark-1.3`, `muse-wonder-1.0`, and `sam-3.1`. The smoke script does not persist token usage.
+- Nov 05 14:50 Istanbul: `.venv/bin/python scripts/smoke_api.py` exited 0. Status HTTP 200, Spark `ready`, and models included `muse-spark-1.3`, `muse-wonder-1.0`, and `sam-3.1`. That version of the smoke script did not persist token usage.
 - Nov 05 14:51 Istanbul. `RECEIPTS_MAX_STEPS=30 .venv/bin/python -m receipts.run --scenario payment_declined --agent wonder --strict-live` exited 2 at the first Wonder request. `POST /v1/responses` returned HTTP 400, `Unsupported tool type: 'computer'`, parameter `tools`. Provider request ID `5a60a5ff-fe7e-42af-863a-96e5ad8b26e8`.
 - The [computer-use guide](https://dev.meta.ai/docs/computer-use) documents the exact `tools=[{"type":"computer"}]` request that the mocked SDK transport verifies. The provider rejection preceded any `computer_call`. The ordered run stopped before Spark judging, SAM, and the happy path.
 - Run `runs/20261105T115143-payment_declined-wonder` recorded Spark, DOM, and combined `UNSURE`. Oracle booking and payment were both `NONE`. The recorded browser frame is `screens/001.png` within the run. The report and all 19 artifacts matched their SQLite SHA-256 and size. An exact credential scan found zero matches in the artifacts and database.
 - Usage is unknown for the rejected Wonder request and the initial Spark smoke. Wonder returned no usage counters and the smoke script did not persist its counters. `usage.json` records one unpriced Wonder attempt. No complete token or spending total is available.
 - The strict-run gates, request/action cap, usage accounting, and SAM stream metadata passed offline checks. `.venv/bin/pytest -q -m 'not live'` reported `98 passed, 1 warning in 19.90s`. Ruff lint and format checks passed. These edits are local at the step-2 stop point.
+
+### Computer tool diagnosis
+
+- The SDK wire test captured `POST https://api.meta.ai/v1/responses` with `model=muse-wonder-1.0` and exactly `tools=[{"type":"computer"}]`. SDK version `2.54.0`. The tool has no additional fields.
+- The minimal probe sent one request per model using the same synthetic 320×180 PNG and one-line click task. Wonder returned HTTP 400 with `Unsupported tool type: 'computer'`, request `b62d629f-d408-4cfa-a03a-4e0a59e9ea11`. Raw redacted body and usage are in `runs/20261105T120619804363-computer-probe/`. This reproduces the first rejection `5a60a5ff-fe7e-42af-863a-96e5ad8b26e8`.
+- Spark returned HTTP 200 and a `computer_call`, request `08c4b278-c237-4819-97bc-ae9b642d149c`. Replaying the response through the SDK with a mocked transport preserved `actions`, `call_id`, and `pending_safety_checks`. Artifacts are in `runs/20261105T120648759444-computer-probe/`.
+- The Spark probe returned 82 input, 0 cached input, and 144 output tokens, 226 total, with estimated cost `$0.0007145`. Wonder supplied no usage counters. Native Wonder computer-use is blocked for the tested account/key. Spark is available for the computer-use actor override.
+- Future model responses and error records update `usage.json` as each call finishes. The smoke script now saves its usage before listing models. Probe and smoke output exclude authorization material.
+
+### Live actor override
+
+- Nov 05 15:08 Istanbul. `RECEIPTS_MAX_STEPS=30 .venv/bin/python -m receipts.run --scenario payment_declined --agent wonder --actor-model muse-spark-1.3 --strict-live` exited 2. Spark response `resp_6aec71cb3a815e0bbf7d4e4a` proposed one click and returned `computer_action_requires_confirmation`. The driver saved the check in SQLite and stopped before executing the click.
+- Run `runs/20261105T120839-payment_declined-wonder`. Spark, DOM, and combined verdicts were `UNSURE`. Oracle booking/payment were `NONE`/`NONE`. The recorded frame is `screens/001.png` and the static report is `report.html` within the run. Spark judging, SAM, and the happy path did not run.
+- The actor call reported 3,514 input, 0 cached, and 231 output tokens, 3,745 total, with estimated cost `$0.00537425`. Including the Spark probe gives 3,596 input, 0 cached, and 375 output tokens, 3,971 total, at an estimated `$0.00608875`. The Wonder repro returned no counters.
+- All 19 run artifacts matched their SQLite SHA-256 and byte size. The saved safety event and credential scan passed.
+- `.venv/bin/pytest -q -m 'not live'` reported `101 passed, 1 warning in 20.62s`. Ruff lint and format checks passed. The smoke usage test uses a mocked response and verifies persistence before model listing.

@@ -322,11 +322,16 @@ def run_episode(
     *,
     offline: bool = False,
     strict_live: bool = False,
+    actor_model: str | None = None,
     runs_dir: Path | str = "runs",
 ) -> Path:
     if scenario not in SCENARIOS or agent not in {"scripted", "wonder"}:
         raise ValueError("Unknown scenario or agent")
     config = load_config()
+    if actor_model is not None:
+        if agent != "wonder" or not actor_model.strip():
+            raise ValueError("An actor model override requires a computer-use agent and model ID")
+        config = replace(config, agent_model=actor_model)
     if strict_live:
         if offline or not config.api_key or agent != "wonder" or scenario not in LIVE_EXPECTED:
             raise ValueError("Strict live mode requires a key and a Wonder happy or declined run")
@@ -367,6 +372,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", choices=SCENARIOS, default="payment_declined")
     parser.add_argument("--agent", choices=("scripted", "wonder"), default="scripted")
+    parser.add_argument("--actor-model", help="Override the computer-use model for --agent wonder")
     parser.add_argument(
         "--offline",
         action="store_true",
@@ -386,21 +392,25 @@ def main() -> int:
             json.loads(args.goal) if args.goal else None,
             offline=args.offline,
             strict_live=args.strict_live,
+            actor_model=args.actor_model,
         )
         verdict = json.loads((directory / "verdict.json").read_text())
         evidence = json.loads((directory / "evidence.json").read_text())
+        metadata = json.loads((directory / "metadata.json").read_text())
         live_failure = directory / "live_failure.json"
+        usage = directory / "usage.json"
         print(
             json.dumps(
                 {
                     "run_dir": str(directory),
+                    "actor_model": metadata["models"]["agent"] if args.agent == "wonder" else None,
                     "spark": verdict["spark"]["verdict"],
                     "dom": verdict["dom"]["verdict"],
                     "combined": verdict["combined"]["verdict"],
                     "evidence_frame": evidence["frame"],
                     "evidence_source": evidence["source"],
                     "report": str(directory / "report.html"),
-                    **({"usage": str(directory / "usage.json")} if args.strict_live else {}),
+                    **({"usage": str(usage)} if usage.exists() else {}),
                     **({"live_failure": str(live_failure)} if live_failure.exists() else {}),
                 }
             )

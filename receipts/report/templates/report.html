@@ -114,7 +114,7 @@
       <div>
         <div class="eyebrow">Run report</div>
         <h1>Did the agent finish?</h1>
-        <div class="runid">{{ run_id }}</div>
+        <div class="runid">{{ run_id }}{% if actor_model %} · Actor {{ actor_model }}{% endif %}</div>
       </div>
       <div class="verdict {{ combined_verdict }}" aria-label="Combined verdict: {{ combined_verdict|replace('_', ' ') }}">
         <span class="label">Combined verdict</span>
