@@ -15,6 +15,12 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _VERDICTS = {"TRUE_DONE", "FALSE_DONE", "UNSURE"}
 
 
+def _is_report_file(path: Path) -> bool:
+    return path.name == "report.html" or (
+        path.name.startswith("report-") and path.suffix == ".html"
+    )
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -106,6 +112,23 @@ def _goal_from_database(db_path: Path, run_id: str) -> dict[str, Any]:
     return {}
 
 
+def _database_safety_checks(db_path: Path, run_id: str) -> list[dict[str, Any]]:
+    if not db_path.is_file():
+        return []
+    try:
+        connection = sqlite3.connect(f"file:{quote(str(db_path.resolve()))}?mode=ro", uri=True)
+        try:
+            rows = connection.execute(
+                "SELECT payload_json FROM events WHERE run_id = ? AND kind = 'safety_check' ORDER BY seq",
+                (run_id,),
+            ).fetchall()
+            return [json.loads(row[0]) for row in rows]
+        finally:
+            connection.close()
+    except (sqlite3.Error, json.JSONDecodeError):
+        return []
+
+
 def _database_artifacts(db_path: Path, run_id: str) -> list[dict[str, Any]]:
     if not db_path.is_file():
         return []
@@ -135,7 +158,7 @@ def _database_artifacts(db_path: Path, run_id: str) -> list[dict[str, Any]]:
                     "size": row[2] if len(row) > 2 else None,
                 }
                 for row in rows
-                if Path(str(row[0]).replace("\\", "/")).name != "report.html"
+                if not _is_report_file(Path(str(row[0]).replace("\\", "/")))
             ]
         finally:
             connection.close()
@@ -148,7 +171,7 @@ def _computed_artifacts(root: Path) -> list[dict[str, Any]]:
 
     artifacts: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*")):
-        if path.name == "report.html" or not path.is_file():
+        if _is_report_file(path) or not path.is_file():
             continue
         try:
             resolved = path.resolve(strict=True)
@@ -213,14 +236,19 @@ def _make_env() -> Environment:
     )
 
 
-def render_report(run_dir: Path | str, db_path: Path | str | None = None) -> Path:
-    """Write ``report.html`` in a run directory and return its path."""
+def render_report(
+    run_dir: Path | str,
+    db_path: Path | str | None = None,
+    *,
+    sam_evidence_file: Path | None = None,
+) -> Path:
+    """Render the original report or a separate SAM evidence follow-up."""
     root = Path(run_dir).expanduser().resolve()
     if not root.is_dir():
         raise FileNotFoundError(f"run directory does not exist: {root}")
     database = Path(db_path).expanduser() if db_path is not None else Path("runs/receipts.sqlite")
     verdict_data = _read_json(root / "verdict.json")
-    evidence = _read_json(root / "evidence.json")
+    evidence = _read_json(sam_evidence_file or root / "evidence.json")
     metadata = _read_json(root / "metadata.json")
     steps = _read_steps(root / "steps.jsonl")
     run_id = root.name
@@ -234,12 +262,18 @@ def render_report(run_dir: Path | str, db_path: Path | str | None = None) -> Pat
     combined = verdict_data.get("combined", {})
     if not isinstance(combined, dict):
         combined = {}
-    evidence_frame = combined.get("evidence_frame", evidence.get("frame"))
+    evidence_frame = evidence.get("frame")
+    if sam_evidence_file is None:
+        evidence_frame = combined.get("evidence_frame", evidence_frame)
     try:
         evidence_frame = int(evidence_frame) if evidence_frame is not None else None
     except (TypeError, ValueError, OverflowError):
         evidence_frame = None
-    evidence_t_s = _number(combined.get("evidence_t_s", evidence.get("evidence_t_s")))
+    evidence_t_s = _number(
+        evidence.get("evidence_t_s")
+        if sam_evidence_file
+        else combined.get("evidence_t_s", evidence.get("evidence_t_s"))
+    )
 
     prepared_steps: list[dict[str, Any]] = []
     for step in sorted(
@@ -335,6 +369,8 @@ def render_report(run_dir: Path | str, db_path: Path | str | None = None) -> Pat
         actor_model=(metadata.get("models") or {}).get("agent")
         if metadata.get("agent") == "wonder"
         else None,
+        safety_checks=_database_safety_checks(database, run_id),
+        evidence_followup=sam_evidence_file is not None,
         goal=goal,
         claim=claim or "No agent claim captured.",
         sources=sources,
@@ -357,7 +393,10 @@ def render_report(run_dir: Path | str, db_path: Path | str | None = None) -> Pat
         artifacts=artifacts,
         audit_label=audit_label,
     )
-    output_path = root / "report.html"
+    report_name = (
+        f"report-{sam_evidence_file.parent.name}.html" if sam_evidence_file else "report.html"
+    )
+    output_path = root / report_name
     output_path.write_text(template.render(**context), encoding="utf-8")
     return output_path
 

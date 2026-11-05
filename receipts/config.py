@@ -19,6 +19,7 @@ class Config:
     db_path: Path
     max_steps: int
     api_timeout: float
+    allow_mock_confirmations: bool = False
 
     @property
     def site_url(self) -> str:

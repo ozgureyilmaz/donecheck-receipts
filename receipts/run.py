@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import re
 import subprocess
 import sys
 import time
@@ -154,6 +155,8 @@ async def _episode(
             "offline": offline or not config.api_key,
             "strict_live": strict_live,
             "max_steps": config.max_steps,
+            "actor_model": config.agent_model if agent == "wonder" else None,
+            "allow_mock_confirmations": config.allow_mock_confirmations,
             "models": {
                 "agent": config.agent_model,
                 "judge": config.judge_model,
@@ -323,6 +326,7 @@ def run_episode(
     offline: bool = False,
     strict_live: bool = False,
     actor_model: str | None = None,
+    allow_mock_confirmations: bool = False,
     runs_dir: Path | str = "runs",
 ) -> Path:
     if scenario not in SCENARIOS or agent not in {"scripted", "wonder"}:
@@ -332,6 +336,10 @@ def run_episode(
         if agent != "wonder" or not actor_model.strip():
             raise ValueError("An actor model override requires a computer-use agent and model ID")
         config = replace(config, agent_model=actor_model)
+    if allow_mock_confirmations:
+        if agent != "wonder" or offline:
+            raise ValueError("Mock confirmations require the online computer-use agent")
+        config = replace(config, allow_mock_confirmations=True)
     if strict_live:
         if offline or not config.api_key or agent != "wonder" or scenario not in LIVE_EXPECTED:
             raise ValueError("Strict live mode requires a key and a Wonder happy or declined run")
@@ -340,8 +348,12 @@ def run_episode(
         config = replace(config, max_steps=min(config.max_steps, 30))
     run_root = Path(runs_dir)
     run_root.mkdir(parents=True, exist_ok=True)
+    actor_slug = agent
+    if agent == "wonder":
+        family = re.sub(r"-\d+(?:\.\d+)+(?![.\d])", "", config.agent_model.removeprefix("muse-"))
+        actor_slug = re.sub(r"[^a-z0-9]+", "-", family.lower()).strip("-") or "computer"
     while True:
-        run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{scenario}-{agent}"
+        run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{scenario}-{actor_slug}"
         run_dir = run_root / run_id
         try:
             run_dir.mkdir()
@@ -374,6 +386,11 @@ def main() -> int:
     parser.add_argument("--agent", choices=("scripted", "wonder"), default="scripted")
     parser.add_argument("--actor-model", help="Override the computer-use model for --agent wonder")
     parser.add_argument(
+        "--allow-mock-confirmations",
+        action="store_true",
+        help="Approve allowlisted confirmations inside the local mock browser",
+    )
+    parser.add_argument(
         "--offline",
         action="store_true",
         help="No model calls; Spark is UNSURE and evidence is from DOM",
@@ -393,6 +410,7 @@ def main() -> int:
             offline=args.offline,
             strict_live=args.strict_live,
             actor_model=args.actor_model,
+            allow_mock_confirmations=args.allow_mock_confirmations,
         )
         verdict = json.loads((directory / "verdict.json").read_text())
         evidence = json.loads((directory / "evidence.json").read_text())
@@ -403,7 +421,7 @@ def main() -> int:
             json.dumps(
                 {
                     "run_dir": str(directory),
-                    "actor_model": metadata["models"]["agent"] if args.agent == "wonder" else None,
+                    "actor_model": metadata["actor_model"],
                     "spark": verdict["spark"]["verdict"],
                     "dom": verdict["dom"]["verdict"],
                     "combined": verdict["combined"]["verdict"],

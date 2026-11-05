@@ -1,5 +1,6 @@
 import asyncio
 import json
+from dataclasses import replace
 from importlib.metadata import version
 from types import SimpleNamespace
 
@@ -9,6 +10,8 @@ from openai import AsyncOpenAI, BadRequestError
 
 from receipts.agent.wonder_driver import AgentStopped, allowed_url, run_wonder
 from receipts.config import Config
+
+MOCK_CHECK = {"id": "s1", "code": "computer_action_requires_confirmation", "message": "Review"}
 
 
 def _test_config(tmp_path, max_steps=40):
@@ -59,7 +62,7 @@ def test_safety_checks_stop_without_actions_or_acknowledgment(tmp_path, monkeypa
                     "type": "computer_call",
                     "call_id": "c1",
                     "actions": [{"type": "click", "x": 1, "y": 1}],
-                    "pending_safety_checks": [{"id": "s1", "code": "review", "message": "Review"}],
+                    "pending_safety_checks": [MOCK_CHECK],
                 }
             ],
         }
@@ -85,15 +88,17 @@ def test_safety_checks_stop_without_actions_or_acknowledgment(tmp_path, monkeypa
         steps=[{"screenshot": "frame.png"}],
         run_dir=tmp_path,
         run_id="r",
-        db=SimpleNamespace(event=lambda *args: events.append(args)),
+        db=SimpleNamespace(safety_check=lambda _, payload: events.append(payload)),
     )
-    with pytest.raises(AgentStopped, match="Pending safety"):
-        asyncio.run(run_wonder(None, recorder, {}, _test_config(tmp_path), []))
+    page = SimpleNamespace(url="http://127.0.0.1:8000/")
+    with pytest.raises(AgentStopped, match="mock_confirmation_flag_required"):
+        asyncio.run(run_wonder(page, recorder, {}, _test_config(tmp_path), []))
     assert len(requests) == 1  # Only initial request; no computer_call_output.
-    assert events[0][1] == "pending_safety_checks"
+    assert events[0]["decision"] == "declined"
+    assert events[0]["id"] == MOCK_CHECK["id"]
 
 
-def _fake_wonder_run(tmp_path, monkeypatch, call_items, max_steps):
+def _fake_wonder_run(tmp_path, monkeypatch, call_items, max_steps, *, terminal_claim=None):
     from PIL import Image
 
     Image.new("RGB", (2, 2)).save(tmp_path / "frame.png")
@@ -128,6 +133,11 @@ def _fake_wonder_run(tmp_path, monkeypatch, call_items, max_steps):
 
         async def create(self, **kwargs):
             requests.append(kwargs)
+            if len(requests) > 1 and terminal_claim is not None:
+                return SimpleNamespace(
+                    output_text=terminal_claim,
+                    model_dump=lambda **_: {"status": "completed", "output": []},
+                )
             return response
 
     async def capture(action):
@@ -144,6 +154,72 @@ def _fake_wonder_run(tmp_path, monkeypatch, call_items, max_steps):
     monkeypatch.setattr("receipts.agent.wonder_driver.model_client", lambda _: Client())
     config = _test_config(tmp_path, max_steps)
     return Page(), recorder, config, requests, executed_actions, recorded_actions
+
+
+def test_mock_confirmation_is_logged_before_action_and_echoed_unchanged(tmp_path, monkeypatch):
+    check = {**MOCK_CHECK, "provider_field": {"keep": "unchanged"}}
+    call = {
+        "type": "computer_call",
+        "call_id": "c1",
+        "actions": [{"type": "type", "text": "one"}],
+        "pending_safety_checks": [check],
+    }
+    page, recorder, config, requests, executed, _ = _fake_wonder_run(
+        tmp_path, monkeypatch, [call], max_steps=2, terminal_claim="finished"
+    )
+    events = []
+    original_type = page.keyboard.insert_text
+
+    async def type_after_audit(text):
+        assert events[0]["decision"] == "approved"
+        await original_type(text)
+
+    page.keyboard.insert_text = type_after_audit
+    recorder.db.safety_check = lambda _, payload: events.append(payload)
+    result = asyncio.run(
+        run_wonder(page, recorder, {}, replace(config, allow_mock_confirmations=True), [])
+    )
+    assert result == "finished" and executed == ["one"]
+    assert events[0]["step"] == 1 and events[0]["url"] == page.url
+    followup = requests[1]
+    assert followup["previous_response_id"] == "response-1"
+    assert followup["input"][0]["call_id"] == "c1"
+    assert followup["input"][0]["acknowledged_safety_checks"] == [check]
+
+
+@pytest.mark.parametrize(
+    "checks,max_steps,expected_rules",
+    [
+        (
+            [MOCK_CHECK, {**MOCK_CHECK, "id": "s2", "code": "malicious_instructions"}],
+            2,
+            ["batch_contains_declined_check", "code_not_allowlisted"],
+        ),
+        ([MOCK_CHECK], 1, ["confirmation_exceeds_step_budget"]),
+        (MOCK_CHECK, 2, ["invalid_safety_checks_array"]),
+    ],
+)
+def test_declined_batch_executes_no_actions(
+    tmp_path, monkeypatch, checks, max_steps, expected_rules
+):
+    call = {
+        "type": "computer_call",
+        "call_id": "c1",
+        "actions": [{"type": "type", "text": "one"}],
+        "pending_safety_checks": checks,
+    }
+    page, recorder, config, requests, executed, _ = _fake_wonder_run(
+        tmp_path, monkeypatch, [call], max_steps=max_steps
+    )
+    events = []
+    recorder.db.safety_check = lambda _, payload: events.append(payload)
+    with pytest.raises(AgentStopped, match="Safety check declined"):
+        asyncio.run(
+            run_wonder(page, recorder, {}, replace(config, allow_mock_confirmations=True), [])
+        )
+    assert not executed and len(requests) == 1
+    assert [event["rule"] for event in events] == expected_rules
+    assert all(event["decision"] == "declined" for event in events)
 
 
 def test_action_budget_stops_before_excess_action_without_followup_call(tmp_path, monkeypatch):

@@ -264,6 +264,12 @@ class AuditDB:
         with self._transaction():
             return self._insert_event(run_id, kind, payload)
 
+    def safety_check(self, run_id: str, decision: dict[str, Any]) -> int:
+        """Hash the canonical redacted decision before appending it."""
+        canonical = _json(decision)
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        return self.event(run_id, "safety_check", {**json.loads(canonical), "sha256": digest})
+
     @staticmethod
     def _artifact_path(path: Path | str, run_dir: Path | str | None) -> tuple[Path, str]:
         supplied = Path(path)

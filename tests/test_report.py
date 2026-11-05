@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from receipts.audit.db import AuditDB
 from receipts.report import render_report
 
 FIXTURE = Path(__file__).parent / "fixtures" / "report" / "demo-run"
@@ -39,6 +40,60 @@ def test_report_renders_verdict_evidence_and_escapes_untrusted_text(tmp_path: Pa
     assert 'src="screens/002.png"' in html
     assert "Computed now from run files" in html
     assert "https://" not in html
+
+
+def test_safety_check_is_hashed_after_redaction_and_rendered(tmp_path, monkeypatch):
+    run = copied_fixture(tmp_path)
+    db_path = tmp_path / "audit.sqlite"
+    monkeypatch.setenv("MODEL_API_KEY", "test-private-token")
+    with AuditDB(db_path) as db:
+        db.start_run(run.name, "payment_declined", "wonder", {}, "2026-11-04T19:00:00Z")
+        db.safety_check(
+            run.name,
+            {
+                "id": "s1",
+                "code": "computer_action_requires_confirmation",
+                "message": "Review <script> test-private-token",
+                "decision": "approved",
+                "rule": "allowlisted_mock_confirmation",
+                "url": "http://127.0.0.1:8000/payment",
+                "step": 2,
+                "timestamp": "2026-11-04T19:00:01Z",
+                "call_id": "c1",
+            },
+        )
+    with sqlite3.connect(db_path) as connection:
+        record = json.loads(
+            connection.execute(
+                "SELECT payload_json FROM events WHERE kind='safety_check' AND run_id=?",
+                (run.name,),
+            ).fetchone()[0]
+        )
+    digest = record.pop("sha256")
+    canonical = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    assert hashlib.sha256(canonical.encode()).hexdigest() == digest
+    assert record["message"] == "Review <script> [REDACTED]"
+    html = render_report(run, db_path).read_text()
+    assert "Safety checks" in html and "APPROVED" in html
+    assert "allowlisted_mock_confirmation" in html and digest in html
+    assert "Review &lt;script&gt; [REDACTED]" in html
+
+
+def test_sam_followup_selects_its_frame_and_preserves_original_report(tmp_path):
+    run = copied_fixture(tmp_path)
+    db_path = tmp_path / "missing.sqlite"
+    original = render_report(run, db_path)
+    before = original.read_bytes()
+    followup = run / "sam-point" / "evidence.json"
+    followup.parent.mkdir()
+    followup.write_text(json.dumps({"frame": 1, "source": "sam-3.1", "concept": "Observed toast"}))
+    report = render_report(run, db_path, sam_evidence_file=followup)
+    html = report.read_text()
+    assert report.name == "report-sam-point.html"
+    assert 'id="evidence-image" src="screens/001.png"' in html
+    assert "Evidence follow-up" in html and "Observed toast" in html
+    assert "FALSE DONE" in html
+    assert original.read_bytes() == before
 
 
 def test_boxes_scale_from_detector_dimensions_to_frame_dimensions(tmp_path: Path) -> None:

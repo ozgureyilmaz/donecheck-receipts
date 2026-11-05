@@ -69,5 +69,5 @@ This project audits agents that claim "done" falsely. Do not do it yourself.
 - Never commit secrets. Key lives in `.env` as `MODEL_API_KEY` (code also accepts `META_API_KEY` as a fallback). `.env` is gitignored; `.env.example` holds names only.
 - Never print the key; redact `Authorization` headers and `sk-`/bearer-like strings from logs and the SQLite trail.
 - The mock site is local only (`127.0.0.1`). The Wonder driver must refuse navigation outside `http://127.0.0.1:<port>` and cap steps (`RECEIPTS_MAX_STEPS`).
-- Computer-use `pending_safety_checks`: do not auto-acknowledge; log them and stop the episode (counts as agent failure).
+- Computer-use `pending_safety_checks`: decline by default. The explicit `--allow-mock-confirmations` flag allows only the configured local mock browser and allowlisted check codes. Log each decision before acting and echo approved checks unchanged. Decline and stop for other checks.
 - Do not create the GitHub repo, push to a remote, submit forms, or post anywhere unless Ozgur says so.

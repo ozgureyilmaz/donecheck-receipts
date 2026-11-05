@@ -7,8 +7,9 @@ from urllib.parse import unquote, urlsplit
 from playwright.async_api import BrowserContext, Page
 
 from receipts.agent.recorder import Recorder
-from receipts.common import image_url
+from receipts.common import image_url, utc_now
 from receipts.config import Config, model_client
+from receipts.safety_policy import decide_confirmation
 from receipts.usage import record_model_result
 
 
@@ -110,6 +111,48 @@ async def execute_action(page: Page, action: dict) -> None:
         raise AgentStopped(f"Unsupported action: {kind}")
 
 
+def review_pending_checks(
+    call: dict,
+    url: str,
+    step: int,
+    recorder: Recorder,
+    config: Config,
+    blocked: list[str],
+    *,
+    deny_rule: str | None = None,
+) -> tuple[list[dict], str | None]:
+    checks = call.get("pending_safety_checks", [])
+    if not isinstance(checks, list):
+        checks = [checks]
+        deny_rule = "invalid_safety_checks_array"
+    if blocked or not allowed_url(url, config.mocksite_port):
+        deny_rule = "outside_mock_browser_boundary"
+    decisions = [
+        (False, deny_rule)
+        if deny_rule
+        else decide_confirmation(check, url, enabled=config.allow_mock_confirmations)
+        for check in checks
+    ]
+    denial = next((rule for approved, rule in decisions if not approved), None)
+    for check, (approved, rule) in zip(checks, decisions, strict=True):
+        fields = check if isinstance(check, dict) else {}
+        if approved and denial:
+            approved, rule = False, "batch_contains_declined_check"
+        recorder.db.safety_check(
+            recorder.run_id,
+            {
+                **{key: fields.get(key) for key in ("id", "code", "message")},
+                "decision": "approved" if approved else "declined",
+                "rule": rule,
+                "url": url,
+                "step": step,
+                "timestamp": utc_now(),
+                "call_id": call.get("call_id"),
+            },
+        )
+    return checks, denial or deny_rule
+
+
 async def run_wonder(
     page: Page, recorder: Recorder, goal: dict, config: Config, blocked: list[str]
 ) -> str:
@@ -158,9 +201,20 @@ async def run_wonder(
                 raise
             raw = response.model_dump(mode="json")
             record_model_result(recorder.run_dir, f"wonder_raw_{turn:03d}.json", raw)
+            calls = [item for item in raw.get("output", []) if item.get("type") == "computer_call"]
+            if raw.get("status") != "completed" or len(calls) > 1:
+                for call in calls:
+                    review_pending_checks(
+                        call,
+                        page.url,
+                        turn + 1,
+                        recorder,
+                        config,
+                        blocked,
+                        deny_rule="unsupported_computer_response",
+                    )
             if raw.get("status") != "completed":
                 raise AgentStopped("Incomplete model response")
-            calls = [item for item in raw.get("output", []) if item.get("type") == "computer_call"]
             if not calls:
                 await recorder.capture({"type": "final_claim"})
                 return response.output_text
@@ -168,17 +222,29 @@ async def run_wonder(
                 raise AgentStopped("Expected at most one computer call per response")
             outputs = []
             for call in calls:
-                checks = call.get("pending_safety_checks", [])
-                if checks:
-                    recorder.db.event(recorder.run_id, "pending_safety_checks", checks)
-                    raise AgentStopped("Pending safety checks; no acknowledgment sent")
                 actions = call.get("actions", [])
-                if not isinstance(actions, list) or len(actions) > 50:
+                valid_actions = isinstance(actions, list) and len(actions) <= 50
+                deny_rule = None
+                if not valid_actions:
+                    deny_rule = "invalid_action_batch"
+                elif call.get("pending_safety_checks") and (
+                    turn + 1 == config.max_steps
+                    or actions_executed + len(actions) > config.max_steps
+                ):
+                    deny_rule = "confirmation_exceeds_step_budget"
+                checks, denial = review_pending_checks(
+                    call, page.url, turn + 1, recorder, config, blocked, deny_rule=deny_rule
+                )
+                if not valid_actions:
                     raise AgentStopped("Invalid or excessive action batch")
+                if denial:
+                    raise AgentStopped(f"Safety check declined ({denial})")
                 for action in actions:
                     if actions_executed >= config.max_steps:
                         raise AgentStopped("Action step budget reached")
                     before = page.url
+                    if blocked or not allowed_url(before, config.mocksite_port):
+                        raise AgentStopped("Navigation outside local UI boundary refused")
                     await execute_action(page, action)
                     actions_executed += 1
                     await page.wait_for_timeout(100)
@@ -195,7 +261,7 @@ async def run_wonder(
                     {
                         "type": "computer_call_output",
                         "call_id": call["call_id"],
-                        "acknowledged_safety_checks": [],
+                        "acknowledged_safety_checks": checks,
                         "output": {
                             "type": "computer_screenshot",
                             "image_url": image_url(recorder.run_dir / step["screenshot"]),

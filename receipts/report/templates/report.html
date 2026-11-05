@@ -79,6 +79,9 @@
     .audit-note { margin: -6px 20px 13px; color: var(--muted); font-size: 12px; }
     .audit-list { display: grid; gap: 7px; padding: 0 20px 19px; margin: 0; list-style: none; }
     .audit-list li { display: grid; grid-template-columns: minmax(140px, .4fr) minmax(0, 1.6fr); gap: 14px; padding: 8px 10px; border: 1px solid #243145; border-radius: 9px; background: #0b1420; }
+    .safety-list li { display: block; }
+    .safety-list details { margin-top: 7px; }
+    .safety-list p { margin: 6px 0; overflow-wrap: anywhere; }
     code { color: #bed5e9; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 25px; color: var(--muted); font-size: 12px; }
     .empty { color: var(--muted); padding: 0 20px 20px; }
@@ -140,6 +143,7 @@
         </div>
         <div class="frame-meta">
           <span class="tag"><span class="dot"></span><span id="evidence-source">Evidence source: {{ evidence_source }}</span></span>
+          {% if evidence_followup %}<span class="tag">Evidence follow-up</span>{% endif %}
           {% if mask_asset %}<a class="tag" id="evidence-mask" href="{{ mask_asset }}" target="_blank" rel="noopener">Open local mask SVG ↗</a>{% endif %}
           {% if evidence_step %}<button class="tag" id="enlarge-evidence" type="button">Enlarge frame</button>{% endif %}
         </div>
@@ -182,6 +186,19 @@
           <span class="timeline-caption"><span>Step {{ step.idx }}</span><span>{{ step.time_label }}</span></span>
         </button>{% endfor %}
       </div>{% else %}<p class="empty">No recorded steps are available.</p>{% endif %}
+    </section>
+
+    <section class="card audit-card" aria-label="Safety checks">
+      <div class="card-head"><div><div class="eyebrow">Browser policy</div><h2>Safety checks</h2></div></div>
+      {% if safety_checks %}<ul class="audit-list safety-list">{% for check in safety_checks %}
+        <li><strong class="status {{ 'pass' if check.decision == 'approved' else 'fail' }}">{{ check.decision | upper }}</strong> · Step {{ check.step }} · <code>{{ check.code }}</code>
+          <p>{{ check.message }}</p><p>Rule <code>{{ check.rule }}</code></p>
+          <details><summary>Audit details</summary>
+            <p>Check <code>{{ check.id }}</code></p><p>Call <code>{{ check.call_id }}</code></p>
+            <p>URL <code>{{ check.url }}</code></p><p>Time <code>{{ check.timestamp }}</code></p>
+            <p>SHA-256 <code>{{ check.sha256 }}</code></p>
+          </details>
+        </li>{% endfor %}</ul>{% else %}<p class="empty">No safety policy decisions were recorded.</p>{% endif %}
     </section>
 
     <section class="card audit-card">
