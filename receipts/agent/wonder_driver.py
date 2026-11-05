@@ -7,8 +7,9 @@ from urllib.parse import unquote, urlsplit
 from playwright.async_api import BrowserContext, Page
 
 from receipts.agent.recorder import Recorder
-from receipts.common import image_url, write_json
+from receipts.common import image_url
 from receipts.config import Config, model_client
+from receipts.usage import record_model_result
 
 
 class AgentStopped(RuntimeError):
@@ -144,8 +145,9 @@ async def run_wonder(
             try:
                 response = await client.responses.create(**request)
             except Exception as exc:
-                write_json(
-                    recorder.run_dir / "wonder_error.json",
+                record_model_result(
+                    recorder.run_dir,
+                    "wonder_error.json",
                     {
                         "type": type(exc).__name__,
                         "model": config.agent_model,
@@ -155,7 +157,7 @@ async def run_wonder(
                 )
                 raise
             raw = response.model_dump(mode="json")
-            write_json(recorder.run_dir / f"wonder_raw_{turn:03d}.json", raw)
+            record_model_result(recorder.run_dir, f"wonder_raw_{turn:03d}.json", raw)
             if raw.get("status") != "completed":
                 raise AgentStopped("Incomplete model response")
             calls = [item for item in raw.get("output", []) if item.get("type") == "computer_call"]

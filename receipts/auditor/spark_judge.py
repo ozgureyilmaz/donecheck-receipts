@@ -5,8 +5,9 @@ import math
 import time
 from pathlib import Path
 
-from receipts.common import image_url, write_json
+from receipts.common import image_url
 from receipts.config import Config, model_client
+from receipts.usage import record_model_result
 
 PROPERTIES = {
     "verdict": {"type": "string", "enum": ["TRUE_DONE", "FALSE_DONE", "UNSURE"]},
@@ -121,7 +122,9 @@ async def judge(
                 response = await client.responses.create(
                     model=config.judge_model, input=[{"role": "user", "content": content}], **kwargs
                 )
-                write_json(run_dir / f"spark_raw_{attempt}.json", response.model_dump(mode="json"))
+                record_model_result(
+                    run_dir, f"spark_raw_{attempt}.json", response.model_dump(mode="json")
+                )
                 if response.status != "completed":
                     return unsure(f"Spark response status: {response.status}", config.judge_model)
                 value = validate_judgment(json.loads(response.output_text), frames)
@@ -140,8 +143,9 @@ async def judge(
                 return unsure("Spark returned invalid JSON or evidence", config.judge_model)
             except Exception as exc:
                 # No network/provider retry: an ambiguous request may already have been billed.
-                write_json(
-                    run_dir / "spark_error.json",
+                record_model_result(
+                    run_dir,
+                    "spark_error.json",
                     {
                         "type": type(exc).__name__,
                         "model": config.judge_model,

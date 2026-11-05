@@ -1,5 +1,6 @@
 import asyncio
 import json
+from importlib.metadata import version
 from types import SimpleNamespace
 
 import httpx
@@ -206,7 +207,14 @@ def test_documented_request_is_sent_once_and_rejection_is_preserved(tmp_path, mo
 
     def reject(request):
         body = json.loads(request.content)
-        requests.append((request.method, request.url.path, body["model"], body["tools"]))
+        requests.append(
+            {
+                "method": request.method,
+                "url": str(request.url),
+                "model": body["model"],
+                "tools": body["tools"],
+            }
+        )
         return httpx.Response(
             400,
             headers={"x-request-id": "fixture-rejected"},
@@ -226,7 +234,15 @@ def test_documented_request_is_sent_once_and_rejection_is_preserved(tmp_path, mo
     with pytest.raises(BadRequestError):
         asyncio.run(run_wonder(None, recorder, {}, _test_config(tmp_path), []))
 
-    assert requests == [("POST", "/v1/responses", "muse-wonder-1.0", [{"type": "computer"}])]
+    assert requests == [
+        {
+            "method": "POST",
+            "url": "https://api.meta.ai/v1/responses",
+            "model": "muse-wonder-1.0",
+            "tools": [{"type": "computer"}],
+        }
+    ]
+    print(json.dumps({"openai_sdk": version("openai"), **requests[0]}))
     assert json.loads((tmp_path / "wonder_error.json").read_text()) == {
         "type": "BadRequestError",
         "model": "muse-wonder-1.0",

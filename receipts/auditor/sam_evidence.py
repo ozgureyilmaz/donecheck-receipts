@@ -7,8 +7,9 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from receipts.common import image_url, write_json
+from receipts.common import image_url
 from receipts.config import Config, model_client
+from receipts.usage import record_model_result
 
 BOX_RE = re.compile(
     r"<\|box;x1=(\d+);y1=(\d+);x2=(\d+);y2=(\d+);w=(\d+);h=(\d+)(?:;c=(?:\d+(?:\.\d+)?))?\|>"
@@ -178,7 +179,7 @@ async def make_evidence(
                 raw["error_type"] = type(exc).__name__
         finally:
             raw["output_text"] = "".join(chunks)
-            write_json(run_dir / "sam_raw.json", raw)
+            record_model_result(run_dir, "sam_raw.json", raw)
         if raw["completed"]:
             boxes = parse_boxes(raw["output_text"])
             evidence["sam_status"] = "completed" if boxes else "zero_matches"

@@ -12,6 +12,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from receipts.common import write_json
+
 _MILLION = Decimal("1000000")
 _TOKEN_RATES_PER_MILLION: dict[str, dict[str, Decimal]] = {
     # Rates are input / cached input / output USD per million tokens.
@@ -33,6 +35,12 @@ _ERROR_ARTIFACTS = {
     "spark": ("spark_error.json",),
     "sam": ("sam_error.json",),
 }
+
+
+def record_model_result(run_dir: Path, artifact: str, payload: dict[str, Any]) -> None:
+    """Preserve the response and refresh usage before the next model request."""
+    write_json(run_dir / artifact, payload)
+    write_json(run_dir / "usage.json", summarize_usage(run_dir))
 
 
 def _read_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
