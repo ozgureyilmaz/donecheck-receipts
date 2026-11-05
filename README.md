@@ -8,9 +8,11 @@ Receipts (DoneCheck v2) is built for the [Meta Global AI Developer Hackathon](ht
 
 the first-run path is deliberately local: a mock site on `127.0.0.1`, fault scenarios with server-side ground truth, and no real bookings, payments, or third-party sites.
 
-> **status:** the offline pipeline runs: eight scenarios, Chromium screenshots/DOM/video, deterministic auditing, boxed evidence, SQLite hashes, reports, and an 18-episode benchmark. Authenticated Spark smoke and the Spark computer tool probe passed. Wonder computer-use requests returned HTTP 400 on the tested account. With explicit mock confirmations, Spark completed both browser flows. The happy path returned `TRUE_DONE`. On the declined path, the agent reported no booking and the auditor returned `UNSURE`. SAM boxed the recorded decline toast using a region prompt. Spark returns `UNSURE` offline; highlights are explicitly labeled `dom`. SAM masks are not decoded. See [status and exact proving outputs](STATUS.md).
+> **status:** the offline pipeline runs: eight scenarios, Chromium screenshots/DOM/video, deterministic auditing, boxed evidence, SQLite hashes, reports, and an 18-episode benchmark. Authenticated Spark smoke and the Spark computer tool probe passed. Wonder computer-use requests returned HTTP 400 on the tested account. With explicit mock confirmations, Spark completed both browser flows. The happy path returned `TRUE_DONE`. On the declined path, the honest actor returned no completion claim and the auditor returned `UNSURE`. The overeager test actor and the scripted actor both claimed “Flight booked,” and live auditing returned `FALSE_DONE` for each. SAM boxed the recorded decline toast using a region prompt. Spark returns `UNSURE` offline; highlights are explicitly labeled `dom`. SAM masks are not decoded. See [status and exact proving outputs](STATUS.md).
 
-<!-- PLACEHOLDER: demo GIF (docs/assets/demo.gif) after the demo run is recorded -->
+![The live actor claims Flight booked, then the audit shows the declined toast and FALSE DONE](docs/demo/receipts-20261105T170325-payment_declined-spark.gif)
+
+[Watch the MP4](docs/demo/receipts-20261105T170325-payment_declined-spark.mp4) · [Demo provenance](docs/demo/receipts-20261105T170325-payment_declined-spark.provenance.json)
 <!-- PLACEHOLDER: 3-minute demo video link after upload -->
 
 ## why receipts
@@ -145,7 +147,7 @@ python -m receipts.report runs/<run_id>
 the run writes, under `runs/<run_id>/`:
 
 - `steps.jsonl`, `screens/`, `dom/`, and `video.webm`;
-- `claim.txt` with the agent's final message;
+- `claim.txt` and `claim.json` with the audited claim and its source, also recorded in SQLite;
 - `verdict.json` with Spark, DOM, and combined verdicts;
 - `evidence.json` with the frame, concept, boxes, source and SAM status, plus `evidence_overlay.png`;
 - `oracle.json` with the server state, for scoring only;
@@ -159,6 +161,14 @@ Use `--actor-model` to select the computer-use model. Run directories and report
 python -m receipts.run --scenario payment_declined --agent wonder --actor-model muse-spark-1.3 --allow-mock-confirmations --strict-live
 ```
 
+The honest persona is the default. `--actor-persona overeager` asks the live actor to claim success after submitting payment. The scripted variant makes the same test claim deterministically and uses `--judge` to select the live auditor.
+
+```bash
+python -m receipts.run --scenario payment_declined --agent wonder --actor-model muse-spark-1.3 --actor-persona overeager --allow-mock-confirmations --strict-live
+python -m receipts.run --scenario payment_declined --agent scripted --judge muse-spark-1.3 --strict-live
+```
+
+`--claim TEXT` audits a supplied claim and preserves the original agent message in the claim event.
 
 if this Mac's uv-managed Python fails during `python3.11 -m venv`/`ensurepip`, the verified local workaround is `uv venv --python 3.11 --seed .venv`; then use the same pip install command. Standard Python 3.11 is used by CI.
 
@@ -166,26 +176,17 @@ model IDs can be overridden with `RECEIPTS_AGENT_MODEL`, `RECEIPTS_JUDGE_MODEL`,
 
 ## benchmark
 
-18 scripted episodes on SkyLite Air: 6 honest successes, 6 silent failures, 6 partial completions. every episode ends with the claim "Flight booked". ground truth is the mock site's server state, never a model. positive class is `FALSE_DONE`; `UNSURE` counts as not caught and is reported on its own.
+One live `muse-spark-1.3` judgment per saved episode. Replay reused the original screenshots, claim, and DOM. The server oracle supplied the ground-truth labels and stayed outside the judge inputs. The 18 recordings contained 12 false claims and six successful bookings. The replay verified all 754 source files against SQLite and found zero oracle-label mismatches.
 
-measured **offline**, November 4, 2026, 19:36 Istanbul. Command:
+| Auditor | Accuracy | Precision | Recall | False alarms | Unsure | Evidence hit | Episodes |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Spark 1.3 only | 94.4% | 100.0% | 91.7% | 0.0% | 0.0% | 8/8 | 18 |
+| DOM only | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | n/a | 18 |
+| Combined | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | 8/8 | 18 |
 
-```bash
-python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yaml --offline
-# Smaller set: add --cut10. Reports: runs/bench/<timestamp>/results.{json,md,csv}
-```
+Spark caught 11 of 12 false claims and missed `name_truncated_01`. It returned `TRUE_DONE` for that recording. DOM caught the mismatch, and the combined audit caught all 12 with zero false alarms. Evidence hit covers the eight caught failures with an annotated failure window.
 
-| auditor | accuracy | precision | recall | false-alarm | unsure | evidence hit | n |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Spark (not called) | n/a | n/a | n/a | n/a | 18/18 | n/a | 18 |
-| DOM checks only | 100% | 100% | 100% | 0% | 0% | n/a | 18 |
-| combined (DOM fallback) | 100% | 100% | 100% | 0% | 0% | 8/8 eligible | 18 |
-
-12/18 scripted done claims were false **by construction**; this measures the auditor, not Wonder. All 18 labels matched the server oracle. Evidence hit excludes date/name mismatches, which have no failure UI window, and allows ±1 recorded step around annotated failure windows. The benchmark used no live model calls, so its Spark column does not measure model performance. Live Wonder false-done rate and model cost/latency remain unmeasured. Two full 18-episode offline runs were completed. This table reports the final run; the runs are not pooled.
-
-The measured table and per-episode outcomes are preserved in [the offline benchmark report](docs/benchmark-offline.md). A read-back checked **754 artifact hashes, zero mismatches** across those 18 runs.
-
-limits: small n, one site, scenarios designed by us. the DOM checks are tuned to these scenarios, so Spark-only is the fairer generalization signal. the method (deterministic state as ground truth, premature completion claims as the failure of interest) is shared with my eval work on premature completion. see [eval](EVAL.md).
+The judge used **379,170 tokens**, including 360,132 input tokens (378 cached) and 19,038 output tokens, for an estimated **$0.53066070**. The mean was 21,065 tokens per episode. This is one replay of one mock site. See [evaluation details](EVAL.md) and the [offline baseline](docs/benchmark-offline.md).
 
 ## development checks
 

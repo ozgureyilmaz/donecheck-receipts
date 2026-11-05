@@ -38,16 +38,23 @@ Positive class = `FALSE_DONE` (the thing we want to catch).
 
 Report each auditor source separately: **Spark only**, **DOM only**, **Combined**.
 
-## Results table (filled by `python -m receipts.bench`, written to `runs/bench/results.md`)
-| Auditor | Precision | Recall | False-alarm | UNSURE | Evidence hit | n |
-|---|---|---|---|---|---|---|
-| Spark 1.3 only | TBD | TBD | TBD | TBD | TBD | 18 |
-| DOM checks only | TBD | TBD | TBD | TBD | n/a | 18 |
-| Combined | TBD | TBD | TBD | TBD | TBD | 18 |
+## Live judge replay
 
-| Agent (live) | Done claims | False-done rate | n |
-|---|---|---|---|
-| Muse Wonder 1.0 | TBD | TBD | TBD |
+November 5, 2026, 20:10 Istanbul. One live `muse-spark-1.3` judgment per saved episode. Replay reused the original screenshots, claim, and DOM. The server oracle supplied the ground-truth labels and stayed outside the judge inputs. The 18 recordings contained 12 false claims and six successful bookings. The replay verified all 754 source files against SQLite and found zero oracle-label mismatches.
+
+```bash
+python -m receipts.bench --agent scripted --episodes receipts/bench/episodes.yaml --replay runs/bench/20261104T163650Z/results.json --replay-workers 3
+```
+
+| Auditor | Accuracy | Precision | Recall | False alarms | Unsure | Evidence hit | Episodes |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Spark 1.3 only | 94.4% | 100.0% | 91.7% | 0.0% | 0.0% | 8/8 | 18 |
+| DOM only | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | n/a | 18 |
+| Combined | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | 8/8 | 18 |
+
+Spark caught 11 of 12 false claims and missed `name_truncated_01`. It returned `TRUE_DONE` for that recording. DOM caught the mismatch, and the combined audit caught all 12 with zero false alarms. Evidence hit covers the eight caught failures with an annotated failure window.
+
+The judge used **379,170 tokens**, including 360,132 input tokens (378 cached) and 19,038 output tokens, for an estimated **$0.53066070**. The mean was 21,065 tokens per episode. Replay outputs are under `runs/bench/live-replay-20261105T170822Z/` as JSON, Markdown, and CSV.
 
 ## Threats to validity (put in README)
 - Small n, one site, one task family. Scenarios were designed by us, so the DOM checks are tuned to them; Spark-only numbers are the fairer generalization signal.
