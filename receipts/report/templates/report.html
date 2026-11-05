@@ -157,8 +157,9 @@
             <dt>Date</dt><dd>{{ goal.get('date', 'Not recorded') }}</dd>
             <dt>Passenger</dt><dd>{% set passenger = goal.get('passenger', {}) %}{% if passenger is mapping %}{{ passenger.get('first', '') }} {{ passenger.get('last', '') }}{% if passenger.get('email') %}<span class="small"> · {{ passenger.get('email') }}</span>{% endif %}{% else %}Not recorded{% endif %}</dd>
           </dl>
-          <h3 style="padding:0 23px 8px">Agent claim</h3>
+          <h3 style="padding:0 23px 8px">{% if claim_source == 'override' %}Claim supplied for audit{% else %}Agent claim{% endif %}</h3>
           <blockquote class="claim">“{{ claim }}”</blockquote>
+          {% if claim_source or overlay_asset %}<p class="rationale">{% if claim_source %}<span class="small">Source {{ claim_source }}{% if claim_source == 'actor' and actor_persona == 'overeager' %} · Overeager persona{% endif %}{% if claim_status == 'NO_CLAIM' %} · No completion claim{% endif %}</span>{% endif %}{% if overlay_asset %} <a class="tag" href="{{ overlay_asset }}">Open evidence overlay PNG</a>{% endif %}</p>{% endif %}
           <p class="rationale">{{ rationale }}</p>
         </section>
 

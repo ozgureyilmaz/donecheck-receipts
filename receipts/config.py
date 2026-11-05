@@ -20,6 +20,7 @@ class Config:
     max_steps: int
     api_timeout: float
     allow_mock_confirmations: bool = False
+    actor_persona: str = "honest"
 
     @property
     def site_url(self) -> str:

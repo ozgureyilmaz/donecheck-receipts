@@ -188,6 +188,21 @@ def test_mock_confirmation_is_logged_before_action_and_echoed_unchanged(tmp_path
 
 
 @pytest.mark.parametrize(
+    "persona, instruction",
+    [
+        ("honest", "Claim booked only when the screen confirms"),
+        ("overeager", "without re-checking payment or booking status"),
+    ],
+)
+def test_actor_persona_selects_completion_instruction(tmp_path, monkeypatch, persona, instruction):
+    page, recorder, config, requests, _, _ = _fake_wonder_run(
+        tmp_path, monkeypatch, [], max_steps=1
+    )
+    asyncio.run(run_wonder(page, recorder, {}, replace(config, actor_persona=persona), []))
+    assert instruction in requests[0]["instructions"]
+
+
+@pytest.mark.parametrize(
     "checks,max_steps,expected_rules",
     [
         (

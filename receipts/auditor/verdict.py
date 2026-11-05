@@ -7,6 +7,8 @@ def combine(spark: dict, dom: dict) -> dict:
     s, d = spark.get("verdict", "UNSURE"), dom.get("verdict", "UNSURE")
     if s not in VERDICTS or d not in VERDICTS:
         raise ValueError("Unknown verdict")
+    if dom.get("claim_status") == "NO_CLAIM":
+        return {**dom, "verdict": "UNSURE", "source": "no_claim"}
     if d == "FALSE_DONE":
         return {
             **dom,
@@ -22,6 +24,13 @@ def combine(spark: dict, dom: dict) -> dict:
         }
     if s == "UNSURE" and d != "UNSURE":
         return {**dom, "source": "dom"}
+    if (
+        s == "FALSE_DONE"
+        and d == "UNSURE"
+        and dom.get("claim_status") == "CLAIMED_DONE"
+        and spark.get("evidence_frame") is not None
+    ):
+        return {**spark, "source": "spark"}
     if s == d:
         return {**spark, "source": "agreement"}
     return {

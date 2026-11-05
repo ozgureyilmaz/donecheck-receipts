@@ -23,10 +23,17 @@ def test_declined_episode_keeps_transient_evidence_and_final_hashes(tmp_path, mo
     async def isolated_judge(run_dir, goal, claim, frames, config, offline):
         assert not (run_dir / "oracle.json").exists(), "Oracle must not be an auditor input"
         assert goal["from"] == "IST"
+        assert claim == "Flight booked. Payment declined."
         return await judge(run_dir, goal, claim, frames, config, offline)
 
     monkeypatch.setattr("receipts.run.judge", isolated_judge)
-    run_dir = run_episode("payment_declined", "scripted", offline=True, runs_dir=tmp_path / "runs")
+    run_dir = run_episode(
+        "payment_declined",
+        "scripted",
+        offline=True,
+        claim="Flight booked. Payment declined.",
+        runs_dir=tmp_path / "runs",
+    )
     verdict = json.loads((run_dir / "verdict.json").read_text())
     evidence = json.loads((run_dir / "evidence.json").read_text())
     steps = [json.loads(line) for line in (run_dir / "steps.jsonl").read_text().splitlines()]
@@ -43,6 +50,20 @@ def test_declined_episode_keeps_transient_evidence_and_final_hashes(tmp_path, mo
     assert "4242424242424242" not in (run_dir / "steps.jsonl").read_text()
     assert 'type="password"' in (run_dir / "dom/010.html").read_text()
     with sqlite3.connect(database) as conn:
+        claim_event = json.loads(
+            conn.execute(
+                "SELECT payload_json FROM events WHERE run_id=? AND kind='claim.recorded'",
+                (run_dir.name,),
+            ).fetchone()[0]
+        )
+        assert (
+            claim_event["source"] == "override" and claim_event["original_claim"] == "Flight booked"
+        )
+        assert claim_event["text"] == "Flight booked. Payment declined."
+        assert (
+            claim_event["sha256"]
+            == hashlib.sha256((run_dir / "claim.json").read_bytes()).hexdigest()
+        )
         rows = conn.execute(
             "SELECT path,sha256 FROM artifacts WHERE run_id=?", (run_dir.name,)
         ).fetchall()
@@ -72,6 +93,7 @@ def test_strict_live_stops_before_next_provider_call(tmp_path, monkeypatch, fail
         assert config.max_steps == 30
         assert config.agent_model == "muse-spark-1.3"
         assert config.allow_mock_confirmations
+        assert config.actor_persona == "overeager"
         if failed_stage == "wonder":
             raise RuntimeError("simulated provider failure")
         return await run_scripted(page, recorder, goal)
@@ -100,6 +122,7 @@ def test_strict_live_stops_before_next_provider_call(tmp_path, monkeypatch, fail
         "wonder",
         strict_live=True,
         actor_model="muse-spark-1.3",
+        actor_persona="overeager",
         allow_mock_confirmations=True,
         runs_dir=tmp_path / "runs",
     )

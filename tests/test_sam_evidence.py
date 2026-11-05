@@ -58,13 +58,17 @@ class _StubStream:
 
 
 class _StubResponses:
-    def __init__(self, stream: _StubStream):
-        self.stream = stream
+    def __init__(self, streams: list[_StubStream]):
+        self.streams = streams
         self.kwargs = None
+        self.calls = []
 
     async def create(self, **kwargs):
         self.kwargs = kwargs
-        return self.stream
+        self.calls.append(kwargs)
+        if not self.streams:
+            raise AssertionError("Unexpected additional SAM request")
+        return self.streams.pop(0)
 
 
 class _StubUsage:
@@ -76,7 +80,7 @@ class _StubUsage:
 
 
 def _stub_client(monkeypatch, events: list, error: Exception | None = None) -> _StubResponses:
-    responses = _StubResponses(_StubStream(events, error))
+    responses = _StubResponses([_StubStream(events, error)])
 
     @asynccontextmanager
     async def fake_model_client(_config):
@@ -84,6 +88,71 @@ def _stub_client(monkeypatch, events: list, error: Exception | None = None) -> _
 
     monkeypatch.setattr(sam_evidence, "model_client", fake_model_client)
     return responses
+
+
+def _stub_client_sequence(monkeypatch, event_batches: list[list], errors: list | None = None):
+    errors = errors or [None] * len(event_batches)
+    responses = _StubResponses(
+        [_StubStream(events, error) for events, error in zip(event_batches, errors, strict=True)]
+    )
+
+    @asynccontextmanager
+    async def fake_model_client(_config):
+        yield SimpleNamespace(responses=responses)
+
+    monkeypatch.setattr(sam_evidence, "model_client", fake_model_client)
+    return responses
+
+
+def _declined_fixture(tmp_path: Path) -> tuple[Path, dict, list[dict], dict]:
+    run_dir, verdict, _ = _run_fixture(tmp_path)
+    dom_dir = run_dir / "dom"
+    dom_dir.mkdir()
+    (dom_dir / "toast.html").write_text(
+        '<div data-receipt="error">Payment declined. Your card was not charged.</div>',
+        encoding="utf-8",
+    )
+    (dom_dir / "summary.html").write_text(
+        '<h1 data-receipt="notice">Trip summary</h1>', encoding="utf-8"
+    )
+    marker = {
+        "x1": 10.2,
+        "y1": 5.3,
+        "x2": 40.0,
+        "y2": 20.1,
+        "w": 64,
+        "h": 48,
+        "visible": True,
+    }
+    steps = [
+        {
+            "idx": 21,
+            "screenshot": "frame.png",
+            "dom": "dom/toast.html",
+            "receipt_boxes": {"error": marker},
+        },
+        {
+            "idx": 24,
+            "screenshot": "frame.png",
+            "dom": "dom/summary.html",
+            "receipt_boxes": {},
+        },
+    ]
+    verdict.update({"evidence_frame": 24, "evidence_concept": "trip summary notice"})
+    return run_dir, verdict, steps, marker
+
+
+def _completed_events(response_id: str, output_text: str = "") -> list:
+    response = SimpleNamespace(
+        id=response_id,
+        model="sam-test",
+        usage={"input_tokens": 11, "output_tokens": 3, "total_tokens": 14},
+    )
+    events = []
+    if output_text:
+        events.append(SimpleNamespace(type="response.output_text.delta", delta=output_text))
+    events.append(SimpleNamespace(type="response.completed", response=response))
+    return events
 
 
 def test_parse_documented_sam_box_token_sample() -> None:
@@ -266,3 +335,107 @@ def test_stream_exception_preserves_partial_output_without_error_message(
     assert "private-token" not in raw_text
     assert "sk-private" not in raw_text
     assert "Authorization" not in raw_text
+
+
+def test_declined_toast_uses_documented_region_prompt_and_provider_box(tmp_path, monkeypatch):
+    run_dir, verdict, steps, _marker = _declined_fixture(tmp_path)
+    provider_box = "<0f>0<|box;x1=11;y1=5;x2=38;y2=20;w=64;h=48|>"
+    stub = _stub_client_sequence(monkeypatch, [_completed_events("resp_region_123", provider_box)])
+
+    evidence = asyncio.run(sam_evidence.make_evidence(run_dir, verdict, steps, _config()))
+
+    prompt = stub.calls[0]["input"][0]["content"][0]["text"]
+    assert prompt == "<0f>0<|box;x1=10;y1=5;x2=39;y2=20;w=64;h=48|>"
+    assert evidence["frame"] == 21
+    assert evidence["source"] == "sam-test"
+    assert evidence["boxes"] == [{"x1": 11, "y1": 5, "x2": 38, "y2": 20, "w": 64, "h": 48}]
+    assert len(evidence["attempts"]) == 1
+    assert evidence["attempts"][0]["kind"] == "region"
+    prompt_provenance = json.loads(
+        (run_dir / "sam_prompt_00_region.json").read_text(encoding="utf-8")
+    )
+    raw = json.loads((run_dir / "sam_raw_00_region.json").read_text(encoding="utf-8"))
+    assert prompt_provenance["frame"] == raw["prompt_provenance"]["frame"] == 21
+    assert raw["prompt_provenance"]["text"] == prompt
+    usage = json.loads((run_dir / "usage.json").read_text(encoding="utf-8"))
+    assert [call["artifact"] for call in usage["calls"]] == ["sam_raw_00_region.json"]
+
+
+def test_toast_fallbacks_are_bounded_and_each_attempt_is_accounted(tmp_path, monkeypatch):
+    run_dir, verdict, steps, _marker = _declined_fixture(tmp_path)
+    inadequate_text_box = "<0f>0<|box;x1=1;y1=1;x2=5;y2=4;w=64;h=48|>"
+    adequate_point_box = "<0f>0<|box;x1=10;y1=5;x2=39;y2=20;w=64;h=48|>"
+    stub = _stub_client_sequence(
+        monkeypatch,
+        [
+            _completed_events("resp_region_123"),
+            _completed_events("resp_text_234", inadequate_text_box),
+            _completed_events("resp_point_345", adequate_point_box),
+        ],
+    )
+
+    evidence = asyncio.run(sam_evidence.make_evidence(run_dir, verdict, steps, _config()))
+
+    prompts = [call["input"][0]["content"][0]["text"] for call in stub.calls]
+    assert prompts == [
+        "<0f>0<|box;x1=10;y1=5;x2=39;y2=20;w=64;h=48|>",
+        "trip summary notice",
+        "<0f>0<|point;x=24;y=12;w=64;h=48|>-<|point;x=24;y=4;w=64;h=48|>",
+    ]
+    assert [attempt["kind"] for attempt in evidence["attempts"]] == [
+        "region",
+        "text",
+        "point",
+    ]
+    assert evidence["source"] == "sam-test"
+    assert evidence["boxes"] == [{"x1": 10, "y1": 5, "x2": 39, "y2": 20, "w": 64, "h": 48}]
+    usage = json.loads((run_dir / "usage.json").read_text(encoding="utf-8"))
+    assert [call["artifact"] for call in usage["calls"]] == [
+        "sam_raw_00_region.json",
+        "sam_raw_01_text.json",
+        "sam_raw_02_point.json",
+    ]
+    assert all(call["total_tokens"] == 14 for call in usage["calls"])
+
+
+def test_toast_provider_error_stops_without_fallback_requests(tmp_path, monkeypatch):
+    run_dir, verdict, steps, marker = _declined_fixture(tmp_path)
+    failed_response = SimpleNamespace(
+        id="resp_region_failed",
+        model="sam-test",
+        usage={"input_tokens": 4, "output_tokens": 1, "total_tokens": 5},
+    )
+    stub = _stub_client_sequence(
+        monkeypatch,
+        [[SimpleNamespace(type="response.failed", response=failed_response)]],
+    )
+
+    evidence = asyncio.run(sam_evidence.make_evidence(run_dir, verdict, steps, _config()))
+
+    assert len(stub.calls) == 1
+    assert evidence["sam_status"] == "unavailable:ProviderResponseFailed"
+    assert evidence["source"] == "dom"
+    assert evidence["boxes"] == [marker]
+    usage = json.loads((run_dir / "usage.json").read_text(encoding="utf-8"))
+    assert [call["artifact"] for call in usage["calls"]] == ["sam_raw_00_region.json"]
+
+
+def test_toast_prefers_verdict_frame_when_it_has_visible_decline_marker(tmp_path, monkeypatch):
+    run_dir, verdict, steps, marker = _declined_fixture(tmp_path)
+    summary_path = run_dir / "dom" / "summary.html"
+    summary_path.write_text(
+        '<div data-receipt="error">Payment declined. Your card was not charged.</div>',
+        encoding="utf-8",
+    )
+    steps[1]["receipt_boxes"]["error"] = {**marker, "x1": 20, "x2": 50}
+    stub = _stub_client_sequence(
+        monkeypatch,
+        [_completed_events("resp_preferred_456", "<0f>0<|box;x1=20;y1=5;x2=49;y2=20;w=64;h=48|>")],
+    )
+
+    evidence = asyncio.run(sam_evidence.make_evidence(run_dir, verdict, steps, _config()))
+
+    assert stub.calls[0]["input"][0]["content"][0]["text"] == (
+        "<0f>0<|box;x1=20;y1=5;x2=49;y2=20;w=64;h=48|>"
+    )
+    assert evidence["frame"] == 24

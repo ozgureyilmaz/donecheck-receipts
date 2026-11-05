@@ -250,6 +250,7 @@ def render_report(
     verdict_data = _read_json(root / "verdict.json")
     evidence = _read_json(sam_evidence_file or root / "evidence.json")
     metadata = _read_json(root / "metadata.json")
+    claim_record = _read_json(root / "claim.json")
     steps = _read_steps(root / "steps.jsonl")
     run_id = root.name
 
@@ -263,17 +264,15 @@ def render_report(
     if not isinstance(combined, dict):
         combined = {}
     evidence_frame = evidence.get("frame")
-    if sam_evidence_file is None:
-        evidence_frame = combined.get("evidence_frame", evidence_frame)
+    if evidence_frame is None and sam_evidence_file is None:
+        evidence_frame = combined.get("evidence_frame")
     try:
         evidence_frame = int(evidence_frame) if evidence_frame is not None else None
     except (TypeError, ValueError, OverflowError):
         evidence_frame = None
-    evidence_t_s = _number(
-        evidence.get("evidence_t_s")
-        if sam_evidence_file
-        else combined.get("evidence_t_s", evidence.get("evidence_t_s"))
-    )
+    evidence_t_s = _number(evidence.get("evidence_t_s"))
+    if evidence_t_s is None and evidence_frame == combined.get("evidence_frame"):
+        evidence_t_s = _number(combined.get("evidence_t_s"))
 
     prepared_steps: list[dict[str, Any]] = []
     for step in sorted(
@@ -373,6 +372,10 @@ def render_report(
         evidence_followup=sam_evidence_file is not None,
         goal=goal,
         claim=claim or "No agent claim captured.",
+        claim_source=claim_record.get("source"),
+        actor_persona=metadata.get("actor_persona"),
+        claim_status=claim_record.get("claim_status"),
+        overlay_asset=_safe_asset(root, evidence.get("overlay")),
         sources=sources,
         combined_verdict=_verdict(combined),
         rationale=str(combined.get("rationale") or "No combined rationale recorded."),

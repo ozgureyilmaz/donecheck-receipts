@@ -285,6 +285,7 @@ def summarize_usage(run_dir: Path) -> dict[str, Any]:
     sam_path = root / "sam_raw.json"
     if sam_path.is_file():
         response_paths.append(("sam", sam_path))
+    response_paths.extend(("sam", path) for path in sorted(root.glob("sam_raw_*.json")))
     for provider, path in response_paths:
         calls.append(_response_call(provider, path))
 

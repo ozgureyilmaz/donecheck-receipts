@@ -57,3 +57,18 @@ def test_combine_rule_table(
 def test_unknown_verdict_is_rejected(spark: dict, dom: dict) -> None:
     with pytest.raises(ValueError, match="Unknown verdict"):
         combine(spark, dom)
+
+
+def test_visual_contradiction_requires_a_claim_and_cited_frame():
+    spark = {"verdict": "FALSE_DONE", "evidence_frame": 4}
+    assert (
+        combine(spark, {"verdict": "UNSURE", "claim_status": "CLAIMED_DONE"})["verdict"]
+        == "FALSE_DONE"
+    )
+    assert combine(spark, {"verdict": "UNSURE", "claim_status": "NO_CLAIM"})["verdict"] == "UNSURE"
+    assert (
+        combine({"verdict": "FALSE_DONE"}, {"verdict": "UNSURE", "claim_status": "CLAIMED_DONE"})[
+            "verdict"
+        ]
+        == "UNSURE"
+    )

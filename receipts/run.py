@@ -18,7 +18,7 @@ from playwright.async_api import async_playwright
 from receipts.agent.recorder import Recorder
 from receipts.agent.scripted_agent import run_scripted
 from receipts.agent.wonder_driver import install_local_boundary, run_wonder
-from receipts.audit.db import AuditDB, redact
+from receipts.audit.db import AuditDB, redact, sha256_file
 from receipts.auditor.dom_checks import check_dom, claims_done, receipt_values
 from receipts.auditor.keyframes import pick_keyframes
 from receipts.auditor.sam_evidence import make_evidence
@@ -140,6 +140,7 @@ async def _episode(
     config: Config,
     offline: bool,
     strict_live: bool,
+    claim_override: str | None,
 ) -> None:
     run_id = run_dir.name
     started, started_at = time.monotonic(), utc_now()
@@ -156,6 +157,7 @@ async def _episode(
             "strict_live": strict_live,
             "max_steps": config.max_steps,
             "actor_model": config.agent_model if agent == "wonder" else None,
+            "actor_persona": config.actor_persona if agent == "wonder" else None,
             "allow_mock_confirmations": config.allow_mock_confirmations,
             "models": {
                 "agent": config.agent_model,
@@ -233,7 +235,28 @@ async def _episode(
                     await video.save_as(str(run_dir / "video.webm"))
                     await video.delete()
                 await browser.close()
-        (run_dir / "claim.txt").write_text(redact(claim) + "\n")
+        final_claim = redact(claim)
+        claim_source = "scripted" if agent == "scripted" else "actor"
+        if claim_override is not None:
+            claim_source = "override"
+            claim = claim_override
+        claim = redact(claim)
+        claim_record = {
+            "text": claim,
+            "source": claim_source,
+            "claim_status": "CLAIMED_DONE" if claims_done(claim) else "NO_CLAIM",
+            "timestamp": utc_now(),
+            "t_s": round(time.monotonic() - started, 4),
+        }
+        if claim_source == "override":
+            claim_record["original_claim"] = final_claim
+        write_json(run_dir / "claim.json", claim_record)
+        db.event(
+            run_id,
+            "claim.recorded",
+            {**claim_record, "sha256": sha256_file(run_dir / "claim.json")},
+        )
+        (run_dir / "claim.txt").write_text(claim + "\n")
         if failure:
             write_json(run_dir / "agent_failure.json", failure)
         # Auditor uses only goal, claim, screenshots and client DOM. No oracle argument.
@@ -279,6 +302,9 @@ async def _episode(
         }
         evidence = await make_evidence(
             run_dir, combined, steps, config, offline or bool(live_failure)
+        )
+        evidence["evidence_t_s"] = next(
+            (step["t_s"] for step in steps if step["idx"] == evidence["frame"]), None
         )
         if (
             strict_live
@@ -327,11 +353,23 @@ def run_episode(
     strict_live: bool = False,
     actor_model: str | None = None,
     allow_mock_confirmations: bool = False,
+    actor_persona: str = "honest",
+    judge_model: str | None = None,
+    claim: str | None = None,
     runs_dir: Path | str = "runs",
 ) -> Path:
     if scenario not in SCENARIOS or agent not in {"scripted", "wonder"}:
         raise ValueError("Unknown scenario or agent")
     config = load_config()
+    if actor_persona not in {"honest", "overeager"} or (
+        actor_persona != "honest" and agent != "wonder"
+    ):
+        raise ValueError("The overeager persona requires the computer-use agent")
+    config = replace(config, actor_persona=actor_persona)
+    if judge_model is not None:
+        if offline or not config.api_key or not judge_model.strip():
+            raise ValueError("An explicit judge requires online mode and a configured key")
+        config = replace(config, judge_model=judge_model)
     if actor_model is not None:
         if agent != "wonder" or not actor_model.strip():
             raise ValueError("An actor model override requires a computer-use agent and model ID")
@@ -341,8 +379,8 @@ def run_episode(
             raise ValueError("Mock confirmations require the online computer-use agent")
         config = replace(config, allow_mock_confirmations=True)
     if strict_live:
-        if offline or not config.api_key or agent != "wonder" or scenario not in LIVE_EXPECTED:
-            raise ValueError("Strict live mode requires a key and a Wonder happy or declined run")
+        if offline or not config.api_key or scenario not in LIVE_EXPECTED:
+            raise ValueError("Strict live mode requires a key and a happy or declined run")
         if config.api_base != "https://api.meta.ai/v1":
             raise ValueError("Strict live mode requires the official Meta API base")
         config = replace(config, max_steps=min(config.max_steps, 30))
@@ -362,7 +400,9 @@ def run_episode(
             time.sleep(0.05)
     with local_site(config, run_dir):
         asyncio.run(
-            _episode(run_dir, scenario, agent, normalize_goal(goal), config, offline, strict_live)
+            _episode(
+                run_dir, scenario, agent, normalize_goal(goal), config, offline, strict_live, claim
+            )
         )
     if strict_live:
         from receipts.usage import summarize_usage
@@ -385,6 +425,11 @@ def main() -> int:
     parser.add_argument("--scenario", choices=SCENARIOS, default="payment_declined")
     parser.add_argument("--agent", choices=("scripted", "wonder"), default="scripted")
     parser.add_argument("--actor-model", help="Override the computer-use model for --agent wonder")
+    parser.add_argument("--actor-persona", choices=("honest", "overeager"), default="honest")
+    parser.add_argument("--judge", help="Select the live judge model")
+    parser.add_argument(
+        "--claim", help="Audit this claim while preserving the original agent claim"
+    )
     parser.add_argument(
         "--allow-mock-confirmations",
         action="store_true",
@@ -411,6 +456,9 @@ def main() -> int:
             strict_live=args.strict_live,
             actor_model=args.actor_model,
             allow_mock_confirmations=args.allow_mock_confirmations,
+            actor_persona=args.actor_persona,
+            judge_model=args.judge,
+            claim=args.claim,
         )
         verdict = json.loads((directory / "verdict.json").read_text())
         evidence = json.loads((directory / "evidence.json").read_text())

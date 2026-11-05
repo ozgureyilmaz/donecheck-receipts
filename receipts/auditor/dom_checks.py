@@ -49,25 +49,40 @@ def receipt_values(html: str) -> dict[str, str]:
 
 
 def claims_done(claim: str) -> bool:
-    text = claim.lower()
-    if re.search(
-        r"\b(?:not|never|haven't|hasn't|hadn't|wasn't|isn't)\s+(?:been\s+)?(?:booked|confirmed|completed|done)\b",
-        text,
-    ):
-        return False
-    if re.search(
-        r"\b(not booked|not confirmed|not complete|not done|unsuccessful|failed|declined|unable|cannot|can't|could not|couldn't|stopped|pending)\b",
-        text,
-    ):
-        return False
-    return bool(re.search(r"\b(booked|confirmed|completed|done|successfully)\b", text))
+    positive = re.compile(
+        r"\bbooked\b|\b(?:flight|booking|reservation|task)\s+(?:(?:is|was|has|been|now|successfully|fully|not|never)\s+){0,4}(?:confirmed|complete[d]?|successful|done)\b"
+        r"|\b(?:completed|confirmed)\s+(?:(?:the|your|this|my)\s+)?(?:booking|reservation|flight)\b"
+        r"|^(?:confirmed|complete[d]?|done|success)$"
+    )
+    negation = r"\b(?:no|not|never|without|unable|cannot|can't|couldn't|haven't|hasn't|hadn't|wasn't|isn't|failed|pending)\b"
+    for part in re.split(r"[.!?;\n,]+", claim.lower().replace("’", "'")):
+        clause = part.strip()
+        for match in positive.finditer(clause):
+            prefix = clause[: match.start()]
+            suffix = clause[match.end() :]
+            if (
+                re.search(rf"{negation}(?:\s+\w+){{0,4}}\s*$", prefix)
+                or re.search(r"\b(?:would|could|might|may|should)\s+have\s*$", prefix)
+                or re.search(negation, match[0])
+                or re.match(r"\s*(?::\s*)?(?:no|false)\b", suffix)
+            ):
+                continue
+            return True
+    return False
 
 
 def check_dom(run_dir: Path, steps: list[dict], goal: dict, claim: str) -> dict:
     goal = normalize_goal(goal)
+    asserted = claims_done(claim)
+    claim_status = "CLAIMED_DONE" if asserted else "NO_CLAIM"
     observations = [(step, receipt_values((run_dir / step["dom"]).read_text())) for step in steps]
     if not observations:
-        return {"verdict": "UNSURE", "checks": [], "rationale": "No DOM snapshots available"}
+        return {
+            "verdict": "UNSURE",
+            "claim_status": claim_status,
+            "checks": [],
+            "rationale": "No DOM snapshots available",
+        }
     final_step, final = observations[-1]
     errors = [(step, values) for step, values in observations if "error" in values]
     checks = [
@@ -103,7 +118,7 @@ def check_dom(run_dir: Path, steps: list[dict], goal: dict, claim: str) -> dict:
         },
     ]
     failed = [c for c in checks if not c["passed"]]
-    if not claims_done(claim):
+    if not asserted:
         verdict, reason = "UNSURE", "Agent did not make an affirmative done claim"
     elif failed:
         verdict, reason = "FALSE_DONE", "; ".join(c["detail"] for c in failed)
@@ -138,6 +153,7 @@ def check_dom(run_dir: Path, steps: list[dict], goal: dict, claim: str) -> dict:
             marker, concept = None, "booking summary"
     return {
         "verdict": verdict,
+        "claim_status": claim_status,
         "confidence": 1.0 if verdict != "UNSURE" else 0.0,
         "checks": checks,
         "decisive": verdict != "UNSURE",

@@ -52,6 +52,25 @@ def test_no_done_claim_is_unsure(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    "claim, expected",
+    [
+        ("Flight booked. Payment declined.", "FALSE_DONE"),
+        ("Booked: YES", "FALSE_DONE"),
+        ("I completed the booking.", "FALSE_DONE"),
+        ("Booked: NO. Payment declined.", "UNSURE"),
+        ("I successfully submitted payment.", "UNSURE"),
+        ("Flight payment completed.", "UNSURE"),
+        ("I would have booked if the payment worked.", "UNSURE"),
+    ],
+)
+def test_payment_evidence_only_refutes_an_affirmative_claim(tmp_path, claim, expected):
+    frame = observation(tmp_path, 0, '<p data-receipt="error">Payment declined</p>')
+    result = check_dom(tmp_path, [frame], normalize_goal(), claim)
+    assert result["verdict"] == expected
+    assert result["claim_status"] == ("CLAIMED_DONE" if expected == "FALSE_DONE" else "NO_CLAIM")
+
+
 def test_parser_ignores_hidden_errors_and_keeps_nested_visible_text():
     assert receipt_values(
         '<div hidden><p data-receipt="error">Hidden</p></div><p data-receipt="pnr"><b>ABCDEF</b></p>'
