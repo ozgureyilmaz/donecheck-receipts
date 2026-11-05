@@ -10,6 +10,7 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
@@ -22,9 +23,6 @@ runs/
 *.db
 test-results/
 playwright-report/
-
-# keep curated demo artifacts explicitly
-!docs/assets/
 
 # os / editors
 .DS_Store
