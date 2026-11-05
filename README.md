@@ -8,7 +8,7 @@ Receipts (DoneCheck v2) is built for the [Meta Global AI Developer Hackathon](ht
 
 the first-run path is deliberately local: a mock site on `127.0.0.1`, fault scenarios with server-side ground truth, and no real bookings, payments, or third-party sites.
 
-> **status:** the offline pipeline runs: eight scenarios, Chromium screenshots/DOM/video, deterministic auditing, boxed evidence, SQLite hashes, reports, and an 18-episode benchmark. Authenticated Spark smoke and the Spark computer tool probe passed. Wonder computer-use requests returned HTTP 400 on the tested account. The live Spark browser run stopped at a provider safety confirmation. Spark returns `UNSURE` offline; highlights are explicitly labeled `dom`. SAM masks are not decoded. See [status and exact proving outputs](STATUS.md).
+> **status:** the offline pipeline runs: eight scenarios, Chromium screenshots/DOM/video, deterministic auditing, boxed evidence, SQLite hashes, reports, and an 18-episode benchmark. Authenticated Spark smoke and the Spark computer tool probe passed. Wonder computer-use requests returned HTTP 400 on the tested account. With explicit mock confirmations, Spark completed both browser flows. The happy path returned `TRUE_DONE`. On the declined path, the agent reported no booking and the auditor returned `UNSURE`. SAM boxed the recorded decline toast using a region prompt. Spark returns `UNSURE` offline; highlights are explicitly labeled `dom`. SAM masks are not decoded. See [status and exact proving outputs](STATUS.md).
 
 <!-- PLACEHOLDER: demo GIF (docs/assets/demo.gif) after the demo run is recorded -->
 <!-- PLACEHOLDER: 3-minute demo video link after upload -->
@@ -151,12 +151,12 @@ the run writes, under `runs/<run_id>/`:
 - `oracle.json` with the server state, for scoring only;
 - `report.html`.
 
-to enable the model path, set `MODEL_API_KEY` in `.env`, run `python scripts/smoke_api.py`, then omit `--offline`. A scripted run calls Spark and SAM; `--agent wonder` also calls the computer-use model. With no key, scripted runs use the offline fallback automatically and Wonder exits 2 with an explicit failure artifact. Responses are saved redacted, provider errors are not automatically retried, and pending safety checks stop the episode. Model calls save usage and estimated cost to `usage.json`.
+to enable the model path, set `MODEL_API_KEY` in `.env`, run `python scripts/smoke_api.py`, then omit `--offline`. A scripted run calls Spark and SAM. `--agent wonder` also calls the computer-use model. With no key, scripted runs use the offline fallback automatically and Wonder exits 2 with an explicit failure artifact. Responses are saved redacted. Model calls save usage and estimated cost to `usage.json`.
 
-Use `--actor-model` to select the computer-use model. This command selects Spark for the strict live check.
+Use `--actor-model` to select the computer-use model. Run directories and report titles use that model's name. `--allow-mock-confirmations` approves allowlisted checks inside the local mock browser. The report shows each decision, rule, and audit hash.
 
 ```bash
-python -m receipts.run --scenario payment_declined --agent wonder --actor-model muse-spark-1.3 --strict-live
+python -m receipts.run --scenario payment_declined --agent wonder --actor-model muse-spark-1.3 --allow-mock-confirmations --strict-live
 ```
 
 
