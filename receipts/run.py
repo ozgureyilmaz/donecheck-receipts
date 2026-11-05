@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,14 +18,17 @@ from receipts.agent.recorder import Recorder
 from receipts.agent.scripted_agent import run_scripted
 from receipts.agent.wonder_driver import install_local_boundary, run_wonder
 from receipts.audit.db import AuditDB, redact
-from receipts.auditor.dom_checks import check_dom, claims_done
+from receipts.auditor.dom_checks import check_dom, claims_done, receipt_values
 from receipts.auditor.keyframes import pick_keyframes
 from receipts.auditor.sam_evidence import make_evidence
-from receipts.auditor.spark_judge import judge
+from receipts.auditor.spark_judge import judge, unsure
 from receipts.auditor.verdict import combine
+from receipts.bench.runner import oracle_label
 from receipts.common import normalize_goal, utc_now, write_json
 from receipts.config import Config, load_config
 from receipts.mocksite.scenarios import SCENARIOS
+
+LIVE_EXPECTED = {"payment_declined": "FALSE_DONE", "happy": "TRUE_DONE"}
 
 
 def _apply_agent_failure(combined: dict, dom: dict, claim: str, failure: dict | None) -> dict:
@@ -37,6 +41,50 @@ def _apply_agent_failure(combined: dict, dom: dict, claim: str, failure: dict | 
             "rationale": failure["reason"],
         }
     return combined
+
+
+async def _read_oracle(config: Config, run_id: str, started: float) -> dict:
+    async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
+        response = await client.get(f"{config.site_url}/api/state", params={"session": run_id})
+        response.raise_for_status()
+        oracle = response.json()
+    return {**oracle, "recorded_at": utc_now(), "t_s": round(time.monotonic() - started, 4)}
+
+
+def _live_verdict_problem(
+    scenario: str,
+    goal: dict,
+    spark: dict,
+    dom: dict,
+    oracle: dict,
+    run_dir: Path,
+    steps: list[dict],
+) -> str | None:
+    expected = LIVE_EXPECTED[scenario]
+    if not spark.get("available"):
+        return spark["rationale"]
+    if spark["verdict"] != expected or dom["verdict"] != expected:
+        return f"Expected {expected}; Spark {spark['verdict']}, DOM {dom['verdict']}"
+    if oracle_label(oracle, goal) != expected:
+        return "Oracle state contradicts the expected verdict"
+    if scenario == "payment_declined" and (
+        oracle.get("payment_status") != "DECLINED"
+        or oracle.get("booking_status") != "NOT_BOOKED"
+        or oracle.get("pnr")
+    ):
+        return "Oracle did not record a declined payment without a booking"
+    frame = next((step for step in steps if step["idx"] == spark["evidence_frame"]), None)
+    if frame is None:
+        return "Spark did not cite a recorded frame"
+    markers = receipt_values((run_dir / frame["dom"]).read_text())
+    if (
+        scenario == "payment_declined"
+        and "payment declined" not in markers.get("error", "").lower()
+    ):
+        return "Spark did not cite the payment-declined toast frame"
+    if scenario == "happy" and markers.get("pnr") != oracle.get("pnr"):
+        return "Spark did not cite the confirmed booking reference frame"
+    return None
 
 
 @contextmanager
@@ -84,7 +132,13 @@ def local_site(config: Config, run_dir: Path):
 
 
 async def _episode(
-    run_dir: Path, scenario: str, agent: str, goal: dict, config: Config, offline: bool
+    run_dir: Path,
+    scenario: str,
+    agent: str,
+    goal: dict,
+    config: Config,
+    offline: bool,
+    strict_live: bool,
 ) -> None:
     run_id = run_dir.name
     started, started_at = time.monotonic(), utc_now()
@@ -98,6 +152,8 @@ async def _episode(
             "started_at": started_at,
             "t_s": 0.0,
             "offline": offline or not config.api_key,
+            "strict_live": strict_live,
+            "max_steps": config.max_steps,
             "models": {
                 "agent": config.agent_model,
                 "judge": config.judge_model,
@@ -138,6 +194,8 @@ async def _episode(
                     raise RuntimeError("Wonder requires MODEL_API_KEY and online mode")
                 else:
                     claim = await run_wonder(page, recorder, goal, config, blocked)
+                if strict_live and not claim.strip():
+                    raise RuntimeError("Wonder returned no final claim")
                 if blocked:
                     raise RuntimeError("Browser request outside local UI boundary was blocked")
                 await recorder.capture({"type": "episode_end"})
@@ -159,6 +217,13 @@ async def _episode(
                     await recorder.stop(watcher)
                 if recorder.error:
                     db.event(run_id, "recorder_warning", {"type": recorder.error})
+                    if strict_live and not failure:
+                        failure = {
+                            "type": "RecorderError",
+                            "reason": recorder.error,
+                            "ts": utc_now(),
+                            "t_s": round(time.monotonic() - started, 4),
+                        }
                 steps = recorder.steps
                 await context.close()
                 if video:
@@ -171,9 +236,37 @@ async def _episode(
         # Auditor uses only goal, claim, screenshots and client DOM. No oracle argument.
         dom = check_dom(run_dir, steps, goal, claim)
         frames = pick_keyframes(run_dir, steps)
-        spark = await judge(run_dir, goal, claim, frames, config, offline)
+        live_failure = None
+        oracle = None
+        if strict_live and failure:
+            live_failure = {"stage": "wonder", **failure}
+            spark = unsure("Wonder stopped before judging", config.judge_model)
+        elif strict_live:
+            spark = await judge(run_dir, goal, claim, frames, config, retry_invalid=False)
+        else:
+            spark = await judge(run_dir, goal, claim, frames, config, offline)
         combined = combine(spark, dom)
         combined = _apply_agent_failure(combined, dom, claim, failure)
+        if strict_live:
+            try:
+                oracle = await _read_oracle(config, run_id, started)
+            except (httpx.HTTPError, ValueError) as exc:
+                oracle = {}
+                if not live_failure:
+                    live_failure = {"stage": "oracle", "reason": type(exc).__name__}
+            if not live_failure:
+                problem = _live_verdict_problem(scenario, goal, spark, dom, oracle, run_dir, steps)
+                if problem:
+                    live_failure = {"stage": "spark_verification", "reason": problem}
+                else:
+                    # The audited agreement keeps the frame actually cited by Spark.
+                    combined = {
+                        **combined,
+                        **{
+                            field: spark[field]
+                            for field in ("evidence_frame", "evidence_t_s", "evidence_concept")
+                        },
+                    }
         verdict = {
             "spark": spark,
             "dom": dom,
@@ -181,21 +274,36 @@ async def _episode(
             "ts": utc_now(),
             "t_s": round(time.monotonic() - started, 4),
         }
-        evidence = await make_evidence(run_dir, combined, steps, config, offline)
+        evidence = await make_evidence(
+            run_dir, combined, steps, config, offline or bool(live_failure)
+        )
+        if (
+            strict_live
+            and not live_failure
+            and (
+                evidence["sam_status"] != "completed"
+                or evidence["source"] != config.sam_model
+                or not evidence["boxes"]
+            )
+        ):
+            live_failure = {
+                "stage": "sam",
+                "reason": f"SAM did not return a model box ({evidence['sam_status']})",
+            }
         evidence.update({"ts": utc_now(), "t_s": round(time.monotonic() - started, 4)})
         write_json(run_dir / "verdict.json", verdict)
         write_json(run_dir / "evidence.json", evidence)
+        if live_failure:
+            write_json(run_dir / "live_failure.json", live_failure)
+            db.event(run_id, "live_verification_stopped", live_failure)
         for check in dom["checks"]:
             db.add_check(run_id, check["name"], check["passed"], check["detail"])
         for source in ("spark", "dom", "combined"):
             db.add_verdict(run_id, source, {**verdict[source], "run_dir": run_dir})
         db.add_evidence(run_id, {**evidence, "run_dir": run_dir})
-        # Oracle is fetched only after auditing and only for scoring/storage.
-        async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
-            response = await client.get(f"{config.site_url}/api/state", params={"session": run_id})
-            response.raise_for_status()
-            oracle = response.json()
-        oracle.update({"recorded_at": utc_now(), "t_s": round(time.monotonic() - started, 4)})
+        # The oracle stays outside the auditor inputs and is used for verification/storage.
+        if oracle is None:
+            oracle = await _read_oracle(config, run_id, started)
         write_json(run_dir / "oracle.json", oracle)
         db.end_run(run_id, claim, oracle, utc_now())
     except Exception as exc:
@@ -213,11 +321,18 @@ def run_episode(
     goal: dict | None = None,
     *,
     offline: bool = False,
+    strict_live: bool = False,
     runs_dir: Path | str = "runs",
 ) -> Path:
     if scenario not in SCENARIOS or agent not in {"scripted", "wonder"}:
         raise ValueError("Unknown scenario or agent")
     config = load_config()
+    if strict_live:
+        if offline or not config.api_key or agent != "wonder" or scenario not in LIVE_EXPECTED:
+            raise ValueError("Strict live mode requires a key and a Wonder happy or declined run")
+        if config.api_base != "https://api.meta.ai/v1":
+            raise ValueError("Strict live mode requires the official Meta API base")
+        config = replace(config, max_steps=min(config.max_steps, 30))
     run_root = Path(runs_dir)
     run_root.mkdir(parents=True, exist_ok=True)
     while True:
@@ -229,7 +344,13 @@ def run_episode(
         except FileExistsError:
             time.sleep(0.05)
     with local_site(config, run_dir):
-        asyncio.run(_episode(run_dir, scenario, agent, normalize_goal(goal), config, offline))
+        asyncio.run(
+            _episode(run_dir, scenario, agent, normalize_goal(goal), config, offline, strict_live)
+        )
+    if strict_live:
+        from receipts.usage import summarize_usage
+
+        write_json(run_dir / "usage.json", summarize_usage(run_dir))
     # The managed server has closed its log; all files are now final before hashing.
     with AuditDB(config.db_path) as db:
         for artifact in sorted(run_dir.rglob("*")):
@@ -254,6 +375,9 @@ def main() -> int:
     parser.add_argument(
         "--goal", help="Task goal as JSON; defaults to IST to LHR, Nov 20, Ada Lovelace"
     )
+    parser.add_argument(
+        "--strict-live", action="store_true", help="Stop live verification on any failed stage"
+    )
     args = parser.parse_args()
     try:
         directory = run_episode(
@@ -261,9 +385,11 @@ def main() -> int:
             args.agent,
             json.loads(args.goal) if args.goal else None,
             offline=args.offline,
+            strict_live=args.strict_live,
         )
         verdict = json.loads((directory / "verdict.json").read_text())
         evidence = json.loads((directory / "evidence.json").read_text())
+        live_failure = directory / "live_failure.json"
         print(
             json.dumps(
                 {
@@ -274,10 +400,12 @@ def main() -> int:
                     "evidence_frame": evidence["frame"],
                     "evidence_source": evidence["source"],
                     "report": str(directory / "report.html"),
+                    **({"usage": str(directory / "usage.json")} if args.strict_live else {}),
+                    **({"live_failure": str(live_failure)} if live_failure.exists() else {}),
                 }
             )
         )
-        return 2 if (directory / "agent_failure.json").exists() else 0
+        return 2 if live_failure.exists() or (directory / "agent_failure.json").exists() else 0
     except Exception as exc:
         print(
             f"UNSURE: pipeline failed ({type(exc).__name__}): {redact(str(exc))}", file=sys.stderr

@@ -3,14 +3,14 @@
 Update the box, the time (Istanbul) and a one-line proof (command output, PR link) when ticking. No proof, no tick.
 Deadline: Nov 5 05:00 Istanbul = Nov 4 9:00 PM ET.
 
-Last updated: Nov 04 19:40 Istanbul
+Last updated: Nov 05 14:55 Istanbul
 
 ## Setup
 - [x] Repo name chosen: `donecheck-receipts` (free on GitHub at 18:59 Istanbul)
 - [x] Docs pack written (AGENTS, README, PLAN, ROADMAP, HACKATHON, LINKS, EVAL, DEMO, SUBMISSION, STATUS, TASKS, PROMPT)
 - [x] Ozgur confirmed repo name at 19:02 Istanbul (confirmed by user)
 - [x] Public repo confirmed; code/docs pushed to origin/main
-- [ ] `MODEL_API_KEY` in local `.env`; `GET /v1/status` OK; one Spark call OK
+- [x] `MODEL_API_KEY` in local `.env`; `GET /v1/status` returned HTTP 200 and Spark returned `ready`
 - [x] Main developer started from the supplied brief; Luna xhigh workers running
 - [x] Mock site worker completed
 
@@ -105,7 +105,16 @@ Last updated: Nov 04 19:40 Istanbul
 - [x] Exact default command `.venv/bin/python -m receipts.run --scenario payment_declined --agent scripted` -> Spark UNSURE, DOM/combined FALSE_DONE, evidence frame 13, source dom; `runs/20261104T163838-payment_declined-scripted/report.html`. All 43 hashes match; report rerender hash stable. Preview: `runs/demo-report-final.png`.
 
 ## Remaining work / not performed
-- Live Wonder happy/declined, authenticated Spark and SAM, and model listing: UNSURE, no MODEL_API_KEY/META_API_KEY was available. Status endpoint alone returned HTTP 200. Adapters and offline protocol/safety tests do not prove live integration.
+- Authenticated smoke passed. Live judging, SAM evidence, and the happy path remain unverified because Meta rejected the first Wonder computer-use request. See the live verification log below.
 - SAM mask decoding omitted; current offline highlights come from DOM boxes. Live Wonder set and measured model cost/latency are unmeasured.
 - Demo GIF/video recording/upload, actual submission-question verification, form submission, and release tag were not performed. The submission form and social channels were not touched.
 - Hosted CI has one non-failing Starlette TestClient/httpx deprecation warning.
+
+## Live verification
+
+- Nov 05 14:50 Istanbul: `.venv/bin/python scripts/smoke_api.py` exited 0. Status HTTP 200, Spark `ready`, and models included `muse-spark-1.3`, `muse-wonder-1.0`, and `sam-3.1`. The smoke script does not persist token usage.
+- Nov 05 14:51 Istanbul. `RECEIPTS_MAX_STEPS=30 .venv/bin/python -m receipts.run --scenario payment_declined --agent wonder --strict-live` exited 2 at the first Wonder request. `POST /v1/responses` returned HTTP 400, `Unsupported tool type: 'computer'`, parameter `tools`. Provider request ID `5a60a5ff-fe7e-42af-863a-96e5ad8b26e8`.
+- The [computer-use guide](https://dev.meta.ai/docs/computer-use) documents the exact `tools=[{"type":"computer"}]` request that the mocked SDK transport verifies. The provider rejection preceded any `computer_call`. The ordered run stopped before Spark judging, SAM, and the happy path.
+- Run `runs/20261105T115143-payment_declined-wonder` recorded Spark, DOM, and combined `UNSURE`. Oracle booking and payment were both `NONE`. The recorded browser frame is `screens/001.png` within the run. The report and all 19 artifacts matched their SQLite SHA-256 and size. An exact credential scan found zero matches in the artifacts and database.
+- Usage is unknown for the rejected Wonder request and the initial Spark smoke. Wonder returned no usage counters and the smoke script did not persist its counters. `usage.json` records one unpriced Wonder attempt. No complete token or spending total is available.
+- The strict-run gates, request/action cap, usage accounting, and SAM stream metadata passed offline checks. `.venv/bin/pytest -q -m 'not live'` reported `98 passed, 1 warning in 19.90s`. Ruff lint and format checks passed. These edits are local at the step-2 stop point.

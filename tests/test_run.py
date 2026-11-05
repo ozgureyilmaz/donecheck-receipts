@@ -49,3 +49,53 @@ def test_declined_episode_keeps_transient_evidence_and_final_hashes(tmp_path, mo
         for path, expected in rows:
             assert hashlib.sha256((run_dir / path).read_bytes()).hexdigest() == expected, path
         assert len(rows) == len([p for p in run_dir.rglob("*") if p.is_file()])
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failed_stage", ["wonder", "spark_verification"])
+def test_strict_live_stops_before_next_provider_call(tmp_path, monkeypatch, failed_stage):
+    from receipts.agent.scripted_agent import run_scripted
+    from receipts.auditor.sam_evidence import make_evidence
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    monkeypatch.setenv("MOCKSITE_PORT", str(port))
+    monkeypatch.setenv("RECEIPTS_DB", str(tmp_path / "audit.sqlite"))
+    monkeypatch.setenv("MODEL_API_KEY", "strict-mode-test-placeholder")
+    monkeypatch.setenv("META_API_BASE", "https://api.meta.ai/v1")
+    monkeypatch.setenv("RECEIPTS_MAX_STEPS", "40")
+    calls = []
+
+    async def wonder(page, recorder, goal, config, blocked):
+        calls.append("wonder")
+        assert config.max_steps == 30
+        if failed_stage == "wonder":
+            raise RuntimeError("simulated provider failure")
+        return await run_scripted(page, recorder, goal)
+
+    async def spark(run_dir, goal, claim, frames, config, *, retry_invalid):
+        calls.append("spark")
+        assert not retry_invalid
+        assert not (run_dir / "oracle.json").exists()
+        return {
+            "available": True,
+            "verdict": "FALSE_DONE",
+            "evidence_frame": frames[0]["idx"],
+            "evidence_t_s": frames[0]["t_s"],
+            "evidence_concept": "a frame before payment",
+        }
+
+    async def evidence(run_dir, verdict, steps, config, offline):
+        assert offline, "A failed gate must skip paid segmentation"
+        return await make_evidence(run_dir, verdict, steps, config, offline)
+
+    monkeypatch.setattr("receipts.run.run_wonder", wonder)
+    monkeypatch.setattr("receipts.run.judge", spark)
+    monkeypatch.setattr("receipts.run.make_evidence", evidence)
+    run = run_episode("payment_declined", "wonder", strict_live=True, runs_dir=tmp_path / "runs")
+    failure = json.loads((run / "live_failure.json").read_text())
+    assert failure["stage"] == failed_stage
+    assert calls == (["wonder"] if failed_stage == "wonder" else ["wonder", "spark"])
+    assert (run / "report.html").is_file()
+    assert (run / "oracle.json").is_file()

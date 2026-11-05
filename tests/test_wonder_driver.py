@@ -1,11 +1,28 @@
 import asyncio
-from dataclasses import replace
+import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
+from openai import AsyncOpenAI, BadRequestError
 
 from receipts.agent.wonder_driver import AgentStopped, allowed_url, run_wonder
-from receipts.config import load_config
+from receipts.config import Config
+
+
+def _test_config(tmp_path, max_steps=40):
+    return Config(
+        api_key="fake-key",
+        api_base="https://api.meta.ai/v1",
+        agent_model="muse-wonder-1.0",
+        judge_model="muse-spark-1.3",
+        sam_model="sam-3.1",
+        mocksite_host="127.0.0.1",
+        mocksite_port=8000,
+        db_path=tmp_path / "audit.sqlite",
+        max_steps=max_steps,
+        api_timeout=5.0,
+    )
 
 
 @pytest.mark.parametrize(
@@ -70,7 +87,7 @@ def test_safety_checks_stop_without_actions_or_acknowledgment(tmp_path, monkeypa
         db=SimpleNamespace(event=lambda *args: events.append(args)),
     )
     with pytest.raises(AgentStopped, match="Pending safety"):
-        asyncio.run(run_wonder(None, recorder, {}, replace(load_config(), api_key="fake-key"), []))
+        asyncio.run(run_wonder(None, recorder, {}, _test_config(tmp_path), []))
     assert len(requests) == 1  # Only initial request; no computer_call_output.
     assert events[0][1] == "pending_safety_checks"
 
@@ -124,7 +141,7 @@ def _fake_wonder_run(tmp_path, monkeypatch, call_items, max_steps):
         run_id="r",
     )
     monkeypatch.setattr("receipts.agent.wonder_driver.model_client", lambda _: Client())
-    config = replace(load_config(), api_key="fake-key", max_steps=max_steps)
+    config = _test_config(tmp_path, max_steps)
     return Page(), recorder, config, requests, executed_actions, recorded_actions
 
 
@@ -146,6 +163,24 @@ def test_action_budget_stops_before_excess_action_without_followup_call(tmp_path
     assert len(requests) == 1
 
 
+def test_response_budget_allows_one_call_and_makes_no_second_request(tmp_path, monkeypatch):
+    call = {
+        "type": "computer_call",
+        "call_id": "c1",
+        "actions": [{"type": "type", "text": "one"}],
+    }
+    page, recorder, config, requests, executed, recorded = _fake_wonder_run(
+        tmp_path, monkeypatch, [call], max_steps=1
+    )
+
+    with pytest.raises(AgentStopped, match="Step budget reached"):
+        asyncio.run(run_wonder(page, recorder, {}, config, []))
+
+    assert executed == ["one"]
+    assert len(requests) == 1
+    assert recorded[-1] == {"type": "computer_call_output", "call_id": "c1"}
+
+
 def test_multiple_computer_calls_in_one_response_are_rejected_before_actions(tmp_path, monkeypatch):
     first = {"type": "computer_call", "call_id": "c1", "actions": [{"type": "type", "text": "one"}]}
     second = {
@@ -163,3 +198,38 @@ def test_multiple_computer_calls_in_one_response_are_rejected_before_actions(tmp
     assert executed == []
     assert recorded == []
     assert len(requests) == 1
+
+
+def test_documented_request_is_sent_once_and_rejection_is_preserved(tmp_path, monkeypatch):
+    (tmp_path / "frame.png").write_bytes(b"fixture screenshot")
+    requests = []
+
+    def reject(request):
+        body = json.loads(request.content)
+        requests.append((request.method, request.url.path, body["model"], body["tools"]))
+        return httpx.Response(
+            400,
+            headers={"x-request-id": "fixture-rejected"},
+            json={"error": {"message": "Unsupported tool type: 'computer'", "param": "tools"}},
+        )
+
+    def client(config):
+        return AsyncOpenAI(
+            base_url=config.api_base,
+            api_key=config.api_key,
+            max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(reject)),
+        )
+
+    monkeypatch.setattr("receipts.agent.wonder_driver.model_client", client)
+    recorder = SimpleNamespace(steps=[{"screenshot": "frame.png"}], run_dir=tmp_path)
+    with pytest.raises(BadRequestError):
+        asyncio.run(run_wonder(None, recorder, {}, _test_config(tmp_path), []))
+
+    assert requests == [("POST", "/v1/responses", "muse-wonder-1.0", [{"type": "computer"}])]
+    assert json.loads((tmp_path / "wonder_error.json").read_text()) == {
+        "type": "BadRequestError",
+        "model": "muse-wonder-1.0",
+        "request_id": "fixture-rejected",
+        "status_code": 400,
+    }

@@ -66,7 +66,14 @@ def validate_judgment(value: dict, frames: list[dict]) -> dict:
 
 
 async def judge(
-    run_dir: Path, goal: dict, claim: str, frames: list[dict], config: Config, offline: bool = False
+    run_dir: Path,
+    goal: dict,
+    claim: str,
+    frames: list[dict],
+    config: Config,
+    offline: bool = False,
+    *,
+    retry_invalid: bool = True,
 ) -> dict:
     if offline or not config.api_key:
         return unsure("Spark not called: offline mode or no MODEL_API_KEY", config.judge_model)
@@ -94,7 +101,7 @@ async def judge(
         )
     started = time.monotonic()
     async with model_client(config) as client:
-        for attempt in range(2):
+        for attempt in range(2 if retry_invalid else 1):
             try:
                 # Documented Responses shape: https://dev.meta.ai/docs/structured-output
                 kwargs = (
@@ -128,15 +135,20 @@ async def judge(
                     "raw_response_path": f"spark_raw_{attempt}.json",
                 }
             except (ValueError, TypeError, AttributeError):
-                if attempt == 0:
+                if attempt == 0 and retry_invalid:
                     continue  # One bounded JSON-only retry after a completed malformed reply.
-                return unsure(
-                    "Spark returned invalid JSON or evidence after one retry", config.judge_model
-                )
+                return unsure("Spark returned invalid JSON or evidence", config.judge_model)
             except Exception as exc:
                 # No network/provider retry: an ambiguous request may already have been billed.
                 write_json(
-                    run_dir / "spark_error.json", {"type": type(exc).__name__, "retry": False}
+                    run_dir / "spark_error.json",
+                    {
+                        "type": type(exc).__name__,
+                        "model": config.judge_model,
+                        "request_id": getattr(exc, "request_id", None),
+                        "status_code": getattr(exc, "status_code", None),
+                        "retry": False,
+                    },
                 )
                 return unsure(
                     f"Spark unavailable ({type(exc).__name__}); no automatic retry",

@@ -140,8 +140,20 @@ async def run_wonder(
     }
     async with model_client(config) as client:
         actions_executed = 0
-        for turn in range(config.max_steps + 1):
-            response = await client.responses.create(**request)
+        for turn in range(config.max_steps):
+            try:
+                response = await client.responses.create(**request)
+            except Exception as exc:
+                write_json(
+                    recorder.run_dir / "wonder_error.json",
+                    {
+                        "type": type(exc).__name__,
+                        "model": config.agent_model,
+                        "request_id": getattr(exc, "request_id", None),
+                        "status_code": getattr(exc, "status_code", None),
+                    },
+                )
+                raise
             raw = response.model_dump(mode="json")
             write_json(recorder.run_dir / f"wonder_raw_{turn:03d}.json", raw)
             if raw.get("status") != "completed":
@@ -152,8 +164,6 @@ async def run_wonder(
                 return response.output_text
             if len(calls) != 1:
                 raise AgentStopped("Expected at most one computer call per response")
-            if turn == config.max_steps:
-                raise AgentStopped("Step budget reached")
             outputs = []
             for call in calls:
                 checks = call.get("pending_safety_checks", [])

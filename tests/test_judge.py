@@ -83,3 +83,43 @@ def test_network_failure_not_retried(monkeypatch, tmp_path):
     )
     assert result["verdict"] == "UNSURE"
     assert len(calls) == 1
+
+
+def test_strict_judge_preserves_malformed_response_without_retry(monkeypatch, tmp_path):
+    (tmp_path / "frame.png").write_bytes(b"fake screenshot")
+    calls = []
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        @property
+        def responses(self):
+            return SimpleNamespace(create=self.create)
+
+        async def create(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                status="completed",
+                output_text="not JSON",
+                model_dump=lambda **_: {"id": "resp_mock"},
+            )
+
+    monkeypatch.setattr("receipts.auditor.spark_judge.model_client", lambda _: FakeClient())
+    config = replace(load_config(tmp_path / "absent"), api_key="test-fake")
+    result = asyncio.run(
+        judge(
+            tmp_path,
+            {},
+            "Flight booked",
+            [{"idx": 7, "t_s": 2.4, "screenshot": "frame.png"}],
+            config,
+            retry_invalid=False,
+        )
+    )
+    assert result["verdict"] == "UNSURE"
+    assert (tmp_path / "spark_raw_0.json").exists()
+    assert len(calls) == 1
