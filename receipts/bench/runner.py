@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import csv
 import json
+import os
 import statistics
 import sys
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -628,11 +631,51 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sources", type=_parse_sources, default=list(SOURCES))
     parser.add_argument("--offline", action="store_true", help="skip model calls")
     parser.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    parser.add_argument(
+        "--replay",
+        type=Path,
+        help="judge the immutable recordings referenced by a prior results.json",
+    )
+    parser.add_argument("--replay-output", type=Path)
+    parser.add_argument("--replay-workers", type=int, default=3)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.replay is not None:
+        if (
+            args.offline
+            or args.limit is not None
+            or args.cut10
+            or args.agent != "scripted"
+            or tuple(args.sources) != SOURCES
+        ):
+            raise SystemExit("--replay requires the full scripted set and online judge mode")
+        if args.replay_workers < 1:
+            raise SystemExit("--replay-workers must be at least 1")
+        config = load_config()
+        if not config.api_key:
+            raise SystemExit("MODEL_API_KEY (or META_API_KEY) is not configured")
+        if config.judge_model != "muse-spark-1.3":
+            raise SystemExit("Replay is restricted to RECEIPTS_JUDGE_MODEL=muse-spark-1.3")
+        os.environ.pop("OPENAI_LOG", None)
+        config = replace(config, api_base="https://api.meta.ai/v1")
+        from receipts.bench.replay import replay_snapshot
+
+        result = asyncio.run(
+            replay_snapshot(
+                args.replay,
+                config=config,
+                episodes_path=args.episodes,
+                output_dir=args.replay_output,
+                workers=args.replay_workers,
+                artifact_db=config.db_path,
+            )
+        )
+        print(result["markdown"], end="")
+        print(f"\nReplay artifacts: {result['output_dir']}")
+        return 2 if result["failed_calls"] else 0
     if args.limit is not None and args.limit < 1:
         raise SystemExit("--limit must be at least 1")
     episodes = load_episodes(args.episodes, cut10=args.cut10)
